@@ -15,4 +15,15 @@ export const formatDate = (dateString) => {
   }).format(new Date(`${dateString}T00:00:00`));
 };
 
+export const formatFullDate = (dateString) => {
+  if (!dateString) return '-';
+
+  return new Intl.DateTimeFormat('id-ID', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date(`${dateString}T00:00:00`));
+};
+
 export const normalizeText = (value) => String(value || '').trim().toLowerCase();

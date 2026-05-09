@@ -31,7 +31,7 @@ import KpiCard from './components/KpiCard.jsx';
 import StatusBadge from './components/StatusBadge.jsx';
 import { BIKE_STATUSES, STATUS_META, initialBikes, initialTransactions, quickFilters } from './data/seed.js';
 import { getQuickRange, isDateWithinRange } from './lib/dateFilters.js';
-import { formatCurrency, formatDate, normalizeText } from './lib/formatters.js';
+import { formatCurrency, formatDate, formatFullDate, normalizeText } from './lib/formatters.js';
 import { loadState, saveState } from './lib/storage.js';
 
 const STORAGE_KEYS = {
@@ -147,6 +147,42 @@ export default function App() {
       laba: pendapatan - pengeluaran,
     };
   }, [bikes, filteredTransactions]);
+
+  const transactionGroups = useMemo(() => {
+    const sortedTransactions = [...filteredTransactions].sort((firstTransaction, secondTransaction) => {
+      const dateComparison = secondTransaction.date.localeCompare(firstTransaction.date);
+      if (dateComparison !== 0) return dateComparison;
+      return secondTransaction.id - firstTransaction.id;
+    });
+
+    const groups = sortedTransactions.reduce((groupMap, transaction) => {
+      if (!groupMap.has(transaction.date)) {
+        groupMap.set(transaction.date, {
+          date: transaction.date,
+          transactions: [],
+          pendapatan: 0,
+          pengeluaran: 0,
+        });
+      }
+
+      const group = groupMap.get(transaction.date);
+      const amount = Number(transaction.amount || 0);
+      group.transactions.push(transaction);
+
+      if (transaction.type === 'pendapatan') {
+        group.pendapatan += amount;
+      } else {
+        group.pengeluaran += amount;
+      }
+
+      return groupMap;
+    }, new Map());
+
+    return Array.from(groups.values()).map((group) => ({
+      ...group,
+      laba: group.pendapatan - group.pengeluaran,
+    }));
+  }, [filteredTransactions]);
 
   const toggleExpand = (id) => {
     setExpandedCard((currentId) => (currentId === id ? null : id));
@@ -638,43 +674,112 @@ export default function App() {
             </span>
           </div>
 
-          <div className="custom-scrollbar max-h-[560px] overflow-y-auto p-4">
-            {filteredTransactions.length > 0 ? (
-              <div className="space-y-3">
-                {filteredTransactions.map((transaction) => {
-                  const isIncome = transaction.type === 'pendapatan';
-                  const Icon = isIncome ? TrendingUp : TrendingDown;
+          <div className="border-b border-slate-100 p-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4">
+                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-emerald-700">
+                  <TrendingUp size={16} />
+                  Pendapatan
+                </div>
+                <p className="mt-2 text-xl font-black text-emerald-800">{formatCurrency(stats.pendapatan)}</p>
+              </div>
+              <div className="rounded-lg border border-rose-100 bg-rose-50 p-4">
+                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-rose-700">
+                  <TrendingDown size={16} />
+                  Pengeluaran
+                </div>
+                <p className="mt-2 text-xl font-black text-rose-800">{formatCurrency(stats.pengeluaran)}</p>
+              </div>
+              <div className="rounded-lg border border-sky-100 bg-sky-50 p-4">
+                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-sky-700">
+                  <ArrowUpRight size={16} />
+                  Keuntungan
+                </div>
+                <p className={`mt-2 text-xl font-black ${stats.laba >= 0 ? 'text-sky-800' : 'text-rose-800'}`}>
+                  {formatCurrency(stats.laba)}
+                </p>
+              </div>
+            </div>
+          </div>
 
-                  return (
-                    <div
-                      key={transaction.id}
-                      className="flex flex-col gap-3 rounded-lg border border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`rounded-lg p-2 ${isIncome ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                          <Icon size={18} />
-                        </div>
-                        <div>
-                          <p className="font-bold text-slate-800">{transaction.note}</p>
-                          <p className="text-xs font-semibold text-slate-500">{formatDate(transaction.date)}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between gap-3 sm:justify-end">
-                        <p className={`text-sm font-black ${isIncome ? 'text-emerald-700' : 'text-rose-700'}`}>
-                          {isIncome ? '+' : '-'} {formatCurrency(transaction.amount)}
+          <div className="custom-scrollbar max-h-[640px] overflow-y-auto p-4">
+            {transactionGroups.length > 0 ? (
+              <div className="space-y-5">
+                {transactionGroups.map((group) => (
+                  <section key={group.date} className="rounded-lg border border-slate-200 bg-white">
+                    <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+                      <div>
+                        <h3 className="text-sm font-black text-slate-950">{formatFullDate(group.date)}</h3>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">
+                          {group.transactions.length} transaksi pada tanggal ini
                         </p>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteTransaction(transaction.id)}
-                          className="rounded-md p-2 text-slate-400 transition hover:bg-white hover:text-rose-600"
-                          title="Hapus transaksi"
-                        >
-                          <XCircle size={18} />
-                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 gap-2 text-right sm:grid-cols-3">
+                        <div className="rounded-md bg-white px-3 py-2 ring-1 ring-slate-200">
+                          <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Masuk</p>
+                          <p className="text-xs font-black text-emerald-700">{formatCurrency(group.pendapatan)}</p>
+                        </div>
+                        <div className="rounded-md bg-white px-3 py-2 ring-1 ring-slate-200">
+                          <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Keluar</p>
+                          <p className="text-xs font-black text-rose-700">{formatCurrency(group.pengeluaran)}</p>
+                        </div>
+                        <div className="rounded-md bg-white px-3 py-2 ring-1 ring-slate-200">
+                          <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Laba</p>
+                          <p className={`text-xs font-black ${group.laba >= 0 ? 'text-sky-700' : 'text-rose-700'}`}>
+                            {formatCurrency(group.laba)}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  );
-                })}
+
+                    <div className="divide-y divide-slate-100 p-2">
+                      {group.transactions.map((transaction, index) => {
+                        const isIncome = transaction.type === 'pendapatan';
+                        const Icon = isIncome ? TrendingUp : TrendingDown;
+
+                        return (
+                          <div
+                            key={transaction.id}
+                            className="grid gap-3 rounded-md px-3 py-4 transition hover:bg-slate-50 md:grid-cols-[auto_1fr_auto] md:items-center"
+                          >
+                            <div className="flex items-center gap-3">
+                              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-xs font-black text-slate-500">
+                                {index + 1}
+                              </span>
+                              <div
+                                className={`rounded-lg p-2 ${
+                                  isIncome ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                                }`}
+                              >
+                                <Icon size={18} />
+                              </div>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate font-bold text-slate-800">{transaction.note}</p>
+                              <p className="mt-1 text-xs font-semibold text-slate-500">
+                                {isIncome ? 'Pendapatan' : 'Pengeluaran'}
+                                {transaction.bikeNumber ? ` - Unit ${transaction.bikeNumber}` : ''}
+                              </p>
+                            </div>
+                            <div className="flex items-center justify-between gap-3 md:justify-end">
+                              <p className={`text-sm font-black ${isIncome ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                {isIncome ? '+' : '-'} {formatCurrency(transaction.amount)}
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTransaction(transaction.id)}
+                                className="rounded-md p-2 text-slate-400 transition hover:bg-white hover:text-rose-600"
+                                title="Hapus transaksi"
+                              >
+                                <XCircle size={18} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ))}
               </div>
             ) : (
               <EmptyState icon={History} title="Belum ada transaksi dalam periode ini" />
