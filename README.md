@@ -8,13 +8,12 @@ Dashboard operasional untuk manajemen armada rental sepeda, status unit, dan aud
 - Vite
 - Tailwind CSS
 - Lucide React
-- GitHub Actions untuk deploy GitHub Pages
+- GitHub Pages untuk deployment statis
 
 ## Struktur Repo
 
 ```text
 .
-├── .github/workflows/deploy.yml
 ├── public/.nojekyll
 ├── src
 │   ├── components
@@ -49,6 +48,10 @@ npm run build
 npm run preview
 ```
 
-## Deploy
+## Deploy GitHub Pages
 
-Setiap push ke branch `main` akan menjalankan workflow `.github/workflows/deploy.yml` dan mengirim build `dist` ke GitHub Pages.
+Project ini dipublish dari branch `gh-pages`.
+
+```bash
+npm run deploy
+```
