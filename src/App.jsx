@@ -6,6 +6,8 @@ import {
   Calendar,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   Clock,
   History,
@@ -78,6 +80,41 @@ const statusIcons = {
   hilang: AlertCircle,
 };
 
+const weekdayLabels = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
+
+const parseInputDate = (value) => {
+  if (!value) return null;
+
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const toInputDate = (date) => {
+  const localDate = new Date(date);
+  localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+  return localDate.toISOString().slice(0, 10);
+};
+
+const getMonthStart = (date) => new Date(date.getFullYear(), date.getMonth(), 1);
+
+const addMonths = (date, amount) => new Date(date.getFullYear(), date.getMonth() + amount, 1);
+
+const getCalendarDays = (monthDate) => {
+  const monthStart = getMonthStart(monthDate);
+  const mondayOffset = (monthStart.getDay() + 6) % 7;
+  const gridStart = new Date(monthStart);
+  gridStart.setDate(monthStart.getDate() - mondayOffset);
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(gridStart);
+    date.setDate(gridStart.getDate() + index);
+    return date;
+  });
+};
+
+const isWithinRange = (dateValue, range) =>
+  Boolean(range.start && range.end && dateValue >= range.start && dateValue <= range.end);
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [settingsView, setSettingsView] = useState('menu');
@@ -85,8 +122,10 @@ export default function App() {
   const [transactions, setTransactions] = useState(() => loadState(STORAGE_KEYS.transactions, initialTransactions));
   const [expandedCard, setExpandedCard] = useState('aset-aktif');
   const [searchTerm, setSearchTerm] = useState('');
-  const [quickFilter, setQuickFilter] = useState('bulan');
-  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [quickFilter, setQuickFilter] = useState('hari');
+  const [dateRange, setDateRange] = useState(() => getQuickRange('hari'));
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => parseInputDate(getQuickRange('hari').start) || new Date());
   const [editingBike, setEditingBike] = useState(null);
   const [bikeForm, setBikeForm] = useState(emptyBikeForm);
   const [bikeFormError, setBikeFormError] = useState('');
@@ -106,6 +145,8 @@ export default function App() {
     if (quickFilter === 'custom') return dateRange;
     return getQuickRange(quickFilter);
   }, [dateRange, quickFilter]);
+
+  const calendarDays = useMemo(() => getCalendarDays(calendarMonth), [calendarMonth]);
 
   const filteredTransactions = useMemo(
     () => transactions.filter((transaction) => isDateWithinRange(transaction.date, effectiveDateRange)),
@@ -189,13 +230,36 @@ export default function App() {
   };
 
   const handleQuickFilter = (filter) => {
+    const nextRange = getQuickRange(filter);
     setQuickFilter(filter);
-    setDateRange({ start: '', end: '' });
+    setDateRange(nextRange);
+    setCalendarMonth(parseInputDate(nextRange.start) || new Date());
+    setIsDatePickerOpen(false);
   };
 
-  const handleDateRangeChange = (field, value) => {
+  const handleCalendarDateSelect = (dateValue) => {
+    const activeDate = parseInputDate(dateValue);
+    const shouldStartNewRange =
+      quickFilter !== 'custom' || !dateRange.start || (dateRange.start && dateRange.end && dateRange.start !== dateRange.end);
+
+    if (shouldStartNewRange) {
+      setDateRange({ start: dateValue, end: dateValue });
+    } else if (dateValue < dateRange.start) {
+      setDateRange({ start: dateValue, end: dateRange.start });
+    } else {
+      setDateRange({ start: dateRange.start, end: dateValue });
+    }
+
     setQuickFilter('custom');
-    setDateRange((currentRange) => ({ ...currentRange, [field]: value }));
+    if (activeDate) setCalendarMonth(getMonthStart(activeDate));
+  };
+
+  const handleTodayRange = () => {
+    const todayRange = getQuickRange('hari');
+    setQuickFilter('hari');
+    setDateRange(todayRange);
+    setCalendarMonth(parseInputDate(todayRange.start) || new Date());
+    setIsDatePickerOpen(false);
   };
 
   const resetBikeForm = () => {
@@ -358,6 +422,11 @@ export default function App() {
       <p className="rounded-lg bg-slate-50 px-3 py-4 text-center text-xs font-bold text-slate-400">{emptyText}</p>
     );
 
+  const selectedDateRangeLabel =
+    effectiveDateRange.start === effectiveDateRange.end
+      ? formatDate(effectiveDateRange.start)
+      : `${formatDate(effectiveDateRange.start)} - ${formatDate(effectiveDateRange.end)}`;
+
   const renderDateFilter = () => (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -378,24 +447,106 @@ export default function App() {
           ))}
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-[auto_1fr_auto_1fr] sm:items-center">
-          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-slate-500">
-            <Calendar size={16} />
-            Periode
-          </div>
-          <input
-            type="date"
-            className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-            value={effectiveDateRange.start || ''}
-            onChange={(event) => handleDateRangeChange('start', event.target.value)}
-          />
-          <span className="hidden text-slate-300 sm:block">-</span>
-          <input
-            type="date"
-            className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-            value={effectiveDateRange.end || ''}
-            onChange={(event) => handleDateRangeChange('end', event.target.value)}
-          />
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setIsDatePickerOpen((isOpen) => !isOpen)}
+            className="flex w-full min-w-[280px] items-center justify-between gap-4 rounded-md border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition hover:border-sky-300 focus:border-sky-400 focus:outline-none focus:ring-4 focus:ring-sky-100 sm:w-auto"
+            aria-expanded={isDatePickerOpen}
+          >
+            <span className="flex min-w-0 items-center gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-sky-50 text-sky-700">
+                <Calendar size={17} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[10px] font-black uppercase tracking-wide text-slate-400">Periode</span>
+                <span className="block truncate text-sm font-black text-slate-800">{selectedDateRangeLabel}</span>
+              </span>
+            </span>
+            <ChevronDown size={18} className={`shrink-0 text-slate-400 transition ${isDatePickerOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {isDatePickerOpen ? (
+            <div className="absolute right-0 top-full z-30 mt-3 w-[min(92vw,380px)] rounded-lg border border-slate-200 bg-white p-4 shadow-2xl">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCalendarMonth((currentMonth) => addMonths(currentMonth, -1))}
+                  className="rounded-md p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                  title="Bulan sebelumnya"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <div className="text-center">
+                  <p className="text-sm font-black text-slate-950">
+                    {new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' }).format(calendarMonth)}
+                  </p>
+                  <p className="text-xs font-semibold text-slate-500">{selectedDateRangeLabel}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCalendarMonth((currentMonth) => addMonths(currentMonth, 1))}
+                  className="rounded-md p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                  title="Bulan berikutnya"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-7 gap-1 text-center">
+                {weekdayLabels.map((label) => (
+                  <div key={label} className="py-2 text-[10px] font-black uppercase tracking-wide text-slate-400">
+                    {label}
+                  </div>
+                ))}
+                {calendarDays.map((date) => {
+                  const dateValue = toInputDate(date);
+                  const isCurrentMonth = date.getMonth() === calendarMonth.getMonth();
+                  const isStart = dateValue === effectiveDateRange.start;
+                  const isEnd = dateValue === effectiveDateRange.end;
+                  const isSelected = isStart || isEnd;
+                  const isRangeMiddle = isWithinRange(dateValue, effectiveDateRange) && !isSelected;
+                  const isToday = dateValue === getQuickRange('hari').start;
+
+                  return (
+                    <button
+                      key={dateValue}
+                      type="button"
+                      onClick={() => handleCalendarDateSelect(dateValue)}
+                      className={`h-10 rounded-md text-sm font-bold transition ${
+                        isSelected
+                          ? 'bg-slate-950 text-white shadow-sm'
+                          : isRangeMiddle
+                            ? 'bg-sky-50 text-sky-800'
+                            : isToday
+                              ? 'bg-slate-100 text-slate-950 ring-1 ring-sky-200'
+                              : 'text-slate-700 hover:bg-slate-100'
+                      } ${isCurrentMonth ? '' : 'opacity-40'}`}
+                    >
+                      {date.getDate()}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-100 pt-4">
+                <button
+                  type="button"
+                  onClick={handleTodayRange}
+                  className="rounded-md bg-sky-50 px-3 py-2 text-xs font-black text-sky-700 transition hover:bg-sky-100"
+                >
+                  Hari ini
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsDatePickerOpen(false)}
+                  className="rounded-md bg-slate-950 px-4 py-2 text-xs font-black text-white transition hover:bg-slate-800"
+                >
+                  Terapkan
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
