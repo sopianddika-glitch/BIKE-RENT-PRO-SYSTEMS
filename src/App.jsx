@@ -66,6 +66,8 @@ const navigationItems = [
   { id: 'settings', icon: Settings, title: 'Sistem' },
 ];
 
+const dashboardStatuses = ['tersedia', 'disewa', 'bengkel', 'hilang'];
+
 const statusIcons = {
   tersedia: Clock,
   disewa: User,
@@ -331,11 +333,11 @@ export default function App() {
     <div className="space-y-6">
       {renderDateFilter()}
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <button
           type="button"
           onClick={() => toggleExpand('aset-aktif')}
-          className="rounded-lg border border-slate-800 bg-slate-950 p-6 text-left text-white shadow-soft transition hover:bg-slate-900 xl:col-span-3"
+          className="rounded-lg border border-slate-800 bg-slate-950 p-6 text-left text-white shadow-soft transition hover:bg-slate-900 md:col-span-2 xl:col-span-4"
         >
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -368,7 +370,7 @@ export default function App() {
           ) : null}
         </button>
 
-        {BIKE_STATUSES.map((status) => {
+        {dashboardStatuses.map((status) => {
           const meta = STATUS_META[status];
           const Icon = statusIcons[status];
           const items = stats[status];
