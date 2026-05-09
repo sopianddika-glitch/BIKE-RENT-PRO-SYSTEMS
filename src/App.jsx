@@ -55,6 +55,7 @@ const getTodayInput = () => {
 const emptyTransactionForm = () => ({
   date: getTodayInput(),
   type: 'pendapatan',
+  bikeId: '',
   amount: '',
   note: '',
 });
@@ -67,6 +68,7 @@ const navigationItems = [
 ];
 
 const dashboardStatuses = ['tersedia', 'disewa', 'bengkel', 'hilang'];
+const rentableStatuses = ['tersedia', 'baru'];
 
 const statusIcons = {
   tersedia: Clock,
@@ -90,6 +92,7 @@ export default function App() {
   const [bikeFormError, setBikeFormError] = useState('');
   const [deleteBikeId, setDeleteBikeId] = useState(null);
   const [transactionForm, setTransactionForm] = useState(emptyTransactionForm);
+  const [transactionFormError, setTransactionFormError] = useState('');
 
   useEffect(() => {
     saveState(STORAGE_KEYS.bikes, bikes);
@@ -117,6 +120,11 @@ export default function App() {
       [bike.number, bike.type, bike.status, bike.note].some((value) => normalizeText(value).includes(query)),
     );
   }, [bikes, searchTerm]);
+
+  const rentableBikes = useMemo(
+    () => bikes.filter((bike) => rentableStatuses.includes(bike.status)),
+    [bikes],
+  );
 
   const stats = useMemo(() => {
     const statusGroups = BIKE_STATUSES.reduce((groups, status) => {
@@ -230,20 +238,48 @@ export default function App() {
   const handleAddTransaction = (event) => {
     event.preventDefault();
     const amount = Number(transactionForm.amount);
+    const selectedBikeId = Number(transactionForm.bikeId);
+    const selectedBike = bikes.find((bike) => bike.id === selectedBikeId);
+    const shouldRentBike = transactionForm.type === 'pendapatan' && selectedBike;
+    const cleanNote = transactionForm.note.trim();
 
-    if (!transactionForm.date || !transactionForm.note.trim() || amount <= 0) return;
+    if (!transactionForm.date || amount <= 0 || (!cleanNote && !shouldRentBike)) {
+      setTransactionFormError('Tanggal, nominal, dan catatan atau unit sewa wajib diisi.');
+      return;
+    }
+
+    if (shouldRentBike && !rentableStatuses.includes(selectedBike.status)) {
+      setTransactionFormError('Unit yang dipilih tidak siap disewa.');
+      return;
+    }
 
     const nextId = transactions.length > 0 ? Math.max(...transactions.map((transaction) => transaction.id)) + 1 : 1;
+    const transactionNote = shouldRentBike
+      ? cleanNote
+        ? `Sewa ${selectedBike.number} - ${cleanNote}`
+        : `Sewa ${selectedBike.number} (${selectedBike.type})`
+      : cleanNote;
+
     setTransactions((currentTransactions) => [
       {
         id: nextId,
         date: transactionForm.date,
         type: transactionForm.type,
         amount,
-        note: transactionForm.note.trim(),
+        note: transactionNote,
+        bikeId: shouldRentBike ? selectedBike.id : null,
+        bikeNumber: shouldRentBike ? selectedBike.number : null,
       },
       ...currentTransactions,
     ]);
+
+    if (shouldRentBike) {
+      setBikes((currentBikes) =>
+        currentBikes.map((bike) => (bike.id === selectedBike.id ? { ...bike, status: 'disewa' } : bike)),
+      );
+    }
+
+    setTransactionFormError('');
     setTransactionForm(emptyTransactionForm());
   };
 
@@ -659,7 +695,10 @@ export default function App() {
                   type="date"
                   className="w-full rounded-md border border-slate-200 px-3 py-3 text-sm font-semibold outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                   value={transactionForm.date}
-                  onChange={(event) => setTransactionForm({ ...transactionForm, date: event.target.value })}
+                  onChange={(event) => {
+                    setTransactionForm({ ...transactionForm, date: event.target.value });
+                    setTransactionFormError('');
+                  }}
                 />
               </div>
               <div>
@@ -667,12 +706,43 @@ export default function App() {
                 <select
                   className="w-full rounded-md border border-slate-200 px-3 py-3 text-sm font-semibold outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                   value={transactionForm.type}
-                  onChange={(event) => setTransactionForm({ ...transactionForm, type: event.target.value })}
+                  onChange={(event) => {
+                    const nextType = event.target.value;
+                    setTransactionForm({
+                      ...transactionForm,
+                      type: nextType,
+                      bikeId: nextType === 'pendapatan' ? transactionForm.bikeId : '',
+                    });
+                    setTransactionFormError('');
+                  }}
                 >
                   <option value="pendapatan">Pendapatan</option>
                   <option value="pengeluaran">Pengeluaran</option>
                 </select>
               </div>
+              {transactionForm.type === 'pendapatan' ? (
+                <div>
+                  <label className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Unit Disewa</label>
+                  <select
+                    className="w-full rounded-md border border-slate-200 px-3 py-3 text-sm font-semibold outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100 disabled:bg-slate-100 disabled:text-slate-400"
+                    value={transactionForm.bikeId}
+                    disabled={rentableBikes.length === 0}
+                    onChange={(event) => {
+                      setTransactionForm({ ...transactionForm, bikeId: event.target.value });
+                      setTransactionFormError('');
+                    }}
+                  >
+                    <option value="">
+                      {rentableBikes.length > 0 ? 'Pilih unit dari katalog' : 'Tidak ada unit siap sewa'}
+                    </option>
+                    {rentableBikes.map((bike) => (
+                      <option key={bike.id} value={bike.id}>
+                        {bike.number} - {bike.type} ({STATUS_META[bike.status].label})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <div>
                 <label className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Nominal</label>
                 <input
@@ -682,19 +752,30 @@ export default function App() {
                   placeholder="150000"
                   className="w-full rounded-md border border-slate-200 px-3 py-3 text-sm font-semibold outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                   value={transactionForm.amount}
-                  onChange={(event) => setTransactionForm({ ...transactionForm, amount: event.target.value })}
+                  onChange={(event) => {
+                    setTransactionForm({ ...transactionForm, amount: event.target.value });
+                    setTransactionFormError('');
+                  }}
                 />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Catatan</label>
                 <textarea
                   rows="3"
-                  placeholder="Contoh: Sewa S-001 selama 3 jam"
+                  placeholder="Contoh: Sewa 3 jam atau servis rantai"
                   className="w-full resize-none rounded-md border border-slate-200 px-3 py-3 text-sm font-semibold outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                   value={transactionForm.note}
-                  onChange={(event) => setTransactionForm({ ...transactionForm, note: event.target.value })}
+                  onChange={(event) => {
+                    setTransactionForm({ ...transactionForm, note: event.target.value });
+                    setTransactionFormError('');
+                  }}
                 />
               </div>
+              {transactionFormError ? (
+                <p className="rounded-md bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">
+                  {transactionFormError}
+                </p>
+              ) : null}
               <button
                 type="submit"
                 className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:bg-sky-700"
