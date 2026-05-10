@@ -60,6 +60,15 @@ export const initialTransactions = [
   { id: 4, date: '2026-05-09', type: 'pengeluaran', amount: 200000, note: 'Beli ban baru S-001' },
 ];
 
+export const initialRentalRates = {
+  'Mountain Bike': { hourly: 25000, daily: 150000 },
+  'Electric Scooter': { hourly: 35000, daily: 220000 },
+  'Road Bike': { hourly: 30000, daily: 180000 },
+  'City Bike': { hourly: 20000, daily: 120000 },
+  BMX: { hourly: 18000, daily: 100000 },
+  'Folding Bike': { hourly: 22000, daily: 130000 },
+};
+
 export const quickFilters = [
   { id: 'hari', label: 'Hari' },
   { id: 'minggu', label: 'Minggu' },
