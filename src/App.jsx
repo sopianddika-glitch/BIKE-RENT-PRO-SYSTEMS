@@ -222,16 +222,25 @@ export default function App() {
     const pendapatan = filteredTransactions
       .filter((transaction) => transaction.type === 'pendapatan')
       .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
-    const pengeluaran = filteredTransactions.reduce((total, transaction) => {
-      if (transaction.type === 'pendapatan') return total + Number(transaction.costAmount || 0);
-      return total + Number(transaction.amount || 0);
-    }, 0);
+    const setoranRental = filteredTransactions
+      .filter((transaction) => transaction.type === 'pendapatan')
+      .reduce((total, transaction) => total + Number(transaction.costAmount || 0), 0);
+    const pengeluaranOperasional = filteredTransactions
+      .filter((transaction) => transaction.type === 'pengeluaran')
+      .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+    const pengeluaran = setoranRental + pengeluaranOperasional;
+    const transaksiSewa = filteredTransactions.filter(
+      (transaction) => transaction.type === 'pendapatan' && Number(transaction.costAmount || 0) > 0,
+    ).length;
 
     return {
       ...statusGroups,
       totalMilikKita: statusGroups.tersedia.length + statusGroups.disewa.length,
       pendapatan,
+      setoranRental,
+      pengeluaranOperasional,
       pengeluaran,
+      transaksiSewa,
       laba: pendapatan - pengeluaran,
     };
   }, [bikes, filteredTransactions]);
@@ -699,19 +708,26 @@ export default function App() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           icon={TrendingUp}
-          label="Total Pendapatan"
+          label="Pendapatan Tamu"
           value={formatCurrency(stats.pendapatan)}
           helper={`${filteredTransactions.length} transaksi dalam periode`}
           accentClass="bg-emerald-50 text-emerald-700"
         />
         <KpiCard
+          icon={Wallet}
+          label="Setoran Rental"
+          value={formatCurrency(stats.setoranRental)}
+          helper={`${stats.transaksiSewa} unit sewa wajib disetor`}
+          accentClass="bg-sky-50 text-sky-700"
+        />
+        <KpiCard
           icon={TrendingDown}
-          label="Total Pengeluaran"
-          value={formatCurrency(stats.pengeluaran)}
-          helper={`${formatDate(effectiveDateRange.start)} - ${formatDate(effectiveDateRange.end)}`}
+          label="Operasional"
+          value={formatCurrency(stats.pengeluaranOperasional)}
+          helper="Di luar modal/setoran rental"
           accentClass="bg-rose-50 text-rose-700"
         />
         <div className="rounded-lg border border-slate-800 bg-slate-950 p-5 text-white shadow-soft">
@@ -719,7 +735,9 @@ export default function App() {
             <div>
               <p className="text-xs font-black uppercase tracking-wide text-slate-400">Laba bersih</p>
               <p className="mt-2 text-3xl font-black tracking-tight">{formatCurrency(stats.laba)}</p>
-              <p className="mt-1 text-xs font-semibold text-slate-400">Setelah pengeluaran operasional</p>
+              <p className="mt-1 text-xs font-semibold text-slate-400">
+                Setelah setoran {formatCurrency(stats.setoranRental)}
+              </p>
             </div>
             <div className="rounded-lg bg-white/10 p-3 text-sky-200">
               <ArrowUpRight size={24} />
