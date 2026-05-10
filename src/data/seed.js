@@ -61,12 +61,12 @@ export const initialTransactions = [
 ];
 
 export const initialRentalRates = {
-  'Mountain Bike': { hourly: 25000, daily: 150000 },
-  'Electric Scooter': { hourly: 35000, daily: 220000 },
-  'Road Bike': { hourly: 30000, daily: 180000 },
-  'City Bike': { hourly: 20000, daily: 120000 },
-  BMX: { hourly: 18000, daily: 100000 },
-  'Folding Bike': { hourly: 22000, daily: 130000 },
+  'Mountain Bike': { cost: 30000, price: 50000 },
+  'Electric Scooter': { cost: 30000, price: 50000 },
+  'Road Bike': { cost: 30000, price: 50000 },
+  'City Bike': { cost: 30000, price: 50000 },
+  BMX: { cost: 30000, price: 50000 },
+  'Folding Bike': { cost: 30000, price: 50000 },
 };
 
 export const quickFilters = [

@@ -66,8 +66,6 @@ const emptyTransactionForm = () => ({
   date: getTodayInput(),
   type: 'pendapatan',
   bikeId: '',
-  rateUnit: 'hourly',
-  duration: '1',
   pricingMode: 'auto',
   amount: '',
   note: '',
@@ -82,12 +80,12 @@ const navigationItems = [
 
 const dashboardStatuses = ['tersedia', 'disewa', 'bengkel', 'hilang'];
 const rentableStatuses = ['tersedia', 'baru'];
-const defaultRentalRate = { hourly: 20000, daily: 120000 };
+const defaultRentalRate = { cost: 30000, price: 50000 };
 
-const rateOptions = [
-  { id: 'hourly', label: 'Per Jam', unitLabel: 'jam' },
-  { id: 'daily', label: 'Per Hari', unitLabel: 'hari' },
-];
+const normalizeRentalRate = (rate = {}) => ({
+  cost: Math.max(0, Number(rate.cost ?? defaultRentalRate.cost) || 0),
+  price: Math.max(0, Number(rate.price ?? defaultRentalRate.price) || 0),
+});
 
 const statusIcons = {
   tersedia: Clock,
@@ -204,13 +202,16 @@ export default function App() {
   );
 
   const selectedRentalRate = selectedTransactionBike
-    ? { ...defaultRentalRate, ...rentalRates[selectedTransactionBike.type] }
+    ? normalizeRentalRate(rentalRates[selectedTransactionBike.type])
     : defaultRentalRate;
-  const selectedRateOption = rateOptions.find((option) => option.id === transactionForm.rateUnit) || rateOptions[0];
   const calculatedRentalAmount =
     selectedTransactionBike && transactionForm.pricingMode === 'auto'
-      ? selectedRentalRate[transactionForm.rateUnit] * Math.max(1, Number(transactionForm.duration) || 1)
+      ? selectedRentalRate.price
       : 0;
+  const calculatedRentalProfit = selectedTransactionBike
+    ? (transactionForm.pricingMode === 'auto' ? selectedRentalRate.price : Number(transactionForm.amount) || 0) -
+      selectedRentalRate.cost
+    : 0;
 
   const stats = useMemo(() => {
     const statusGroups = BIKE_STATUSES.reduce((groups, status) => {
@@ -221,9 +222,10 @@ export default function App() {
     const pendapatan = filteredTransactions
       .filter((transaction) => transaction.type === 'pendapatan')
       .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
-    const pengeluaran = filteredTransactions
-      .filter((transaction) => transaction.type === 'pengeluaran')
-      .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+    const pengeluaran = filteredTransactions.reduce((total, transaction) => {
+      if (transaction.type === 'pendapatan') return total + Number(transaction.costAmount || 0);
+      return total + Number(transaction.amount || 0);
+    }, 0);
 
     return {
       ...statusGroups,
@@ -253,10 +255,12 @@ export default function App() {
 
       const group = groupMap.get(transaction.date);
       const amount = Number(transaction.amount || 0);
+      const costAmount = Number(transaction.costAmount || 0);
       group.transactions.push(transaction);
 
       if (transaction.type === 'pendapatan') {
         group.pendapatan += amount;
+        group.pengeluaran += costAmount;
       } else {
         group.pengeluaran += amount;
       }
@@ -389,8 +393,8 @@ export default function App() {
       shouldRentBike && transactionForm.pricingMode === 'auto'
         ? calculatedRentalAmount
         : Number(transactionForm.amount);
-    const duration = Math.max(1, Number(transactionForm.duration) || 1);
-    const rateOption = rateOptions.find((option) => option.id === transactionForm.rateUnit) || rateOptions[0];
+    const rentalRate = shouldRentBike ? normalizeRentalRate(rentalRates[selectedBike.type]) : defaultRentalRate;
+    const costAmount = shouldRentBike ? rentalRate.cost : 0;
     const cleanNote = transactionForm.note.trim();
 
     if (!transactionForm.date || amount <= 0 || (!cleanNote && !shouldRentBike)) {
@@ -404,11 +408,10 @@ export default function App() {
     }
 
     const nextId = transactions.length > 0 ? Math.max(...transactions.map((transaction) => transaction.id)) + 1 : 1;
-    const rentalDetail = shouldRentBike ? `${duration} ${rateOption.unitLabel}` : '';
     const transactionNote = shouldRentBike
       ? cleanNote
-        ? `Sewa ${selectedBike.number} - ${rentalDetail} - ${cleanNote}`
-        : `Sewa ${selectedBike.number} - ${rentalDetail}`
+        ? `Sewa ${selectedBike.number} - ${cleanNote}`
+        : `Sewa ${selectedBike.number}`
       : cleanNote;
 
     setTransactions((currentTransactions) => [
@@ -420,8 +423,8 @@ export default function App() {
         note: transactionNote,
         bikeId: shouldRentBike ? selectedBike.id : null,
         bikeNumber: shouldRentBike ? selectedBike.number : null,
-        rateUnit: shouldRentBike ? transactionForm.rateUnit : null,
-        duration: shouldRentBike ? duration : null,
+        costAmount: shouldRentBike ? costAmount : 0,
+        grossProfit: shouldRentBike ? amount - costAmount : null,
       },
       ...currentTransactions,
     ]);
@@ -445,8 +448,7 @@ export default function App() {
     setRentalRates((currentRates) => ({
       ...currentRates,
       [bikeType]: {
-        ...defaultRentalRate,
-        ...currentRates[bikeType],
+        ...normalizeRentalRate(currentRates[bikeType]),
         [field]: numericValue,
       },
     }));
@@ -982,6 +984,11 @@ export default function App() {
                               <p className="mt-1 text-xs font-semibold text-slate-500">
                                 {isIncome ? 'Pendapatan' : 'Pengeluaran'}
                                 {transaction.bikeNumber ? ` - Unit ${transaction.bikeNumber}` : ''}
+                                {transaction.costAmount
+                                  ? ` - Modal ${formatCurrency(transaction.costAmount)} - Laba ${formatCurrency(
+                                      Number(transaction.amount || 0) - Number(transaction.costAmount || 0),
+                                    )}`
+                                  : ''}
                               </p>
                             </div>
                             <div className="flex items-center justify-between gap-3 md:justify-end">
@@ -1069,11 +1076,11 @@ export default function App() {
                         {rentableBikes.length > 0 ? 'Pilih unit dari katalog' : 'Tidak ada unit siap sewa'}
                       </option>
                       {rentableBikes.map((bike) => {
-                        const rate = { ...defaultRentalRate, ...rentalRates[bike.type] };
+                        const rate = normalizeRentalRate(rentalRates[bike.type]);
 
                         return (
                           <option key={bike.id} value={bike.id}>
-                            {bike.number} - {bike.type} ({STATUS_META[bike.status].label}) - {formatCurrency(rate.hourly)}/jam
+                            {bike.number} - {bike.type} ({STATUS_META[bike.status].label}) - Tamu {formatCurrency(rate.price)}
                           </option>
                         );
                       })}
@@ -1082,53 +1089,27 @@ export default function App() {
 
                   {selectedTransactionBike ? (
                     <div className="rounded-lg border border-sky-100 bg-sky-50 p-3">
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div>
-                          <label className="mb-1 block text-xs font-black uppercase tracking-wide text-sky-700">Paket</label>
-                          <select
-                            className="w-full rounded-md border border-sky-200 bg-white px-3 py-2 text-sm font-bold text-slate-800 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                            value={transactionForm.rateUnit}
-                            onChange={(event) => {
-                              setTransactionForm({
-                                ...transactionForm,
-                                rateUnit: event.target.value,
-                                pricingMode: 'auto',
-                              });
-                              setTransactionFormError('');
-                            }}
-                          >
-                            {rateOptions.map((option) => (
-                              <option key={option.id} value={option.id}>
-                                {option.label} - {formatCurrency(selectedRentalRate[option.id])}
-                              </option>
-                            ))}
-                          </select>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        <div className="rounded-md bg-white px-3 py-2 ring-1 ring-sky-100">
+                          <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Modal</p>
+                          <p className="text-sm font-black text-rose-700">{formatCurrency(selectedRentalRate.cost)}</p>
                         </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-black uppercase tracking-wide text-sky-700">Durasi</label>
-                          <input
-                            type="number"
-                            min="1"
-                            step="1"
-                            className="w-full rounded-md border border-sky-200 bg-white px-3 py-2 text-sm font-bold text-slate-800 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                            value={transactionForm.duration}
-                            onChange={(event) => {
-                              setTransactionForm({
-                                ...transactionForm,
-                                duration: event.target.value,
-                                pricingMode: 'auto',
-                              });
-                              setTransactionFormError('');
-                            }}
-                          />
+                        <div className="rounded-md bg-white px-3 py-2 ring-1 ring-sky-100">
+                          <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Harga Tamu</p>
+                          <p className="text-sm font-black text-emerald-700">{formatCurrency(selectedRentalRate.price)}</p>
+                        </div>
+                        <div className="rounded-md bg-white px-3 py-2 ring-1 ring-sky-100">
+                          <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Laba</p>
+                          <p className={`text-sm font-black ${calculatedRentalProfit >= 0 ? 'text-sky-700' : 'text-rose-700'}`}>
+                            {formatCurrency(calculatedRentalProfit)}
+                          </p>
                         </div>
                       </div>
                       <div className="mt-3 flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2 ring-1 ring-sky-100">
-                        <span className="text-xs font-black uppercase tracking-wide text-slate-500">Hitung Dinamis</span>
+                        <span className="text-xs font-black uppercase tracking-wide text-slate-500">Hitung Modal</span>
                         <span className="text-sm font-black text-sky-800">
-                          {formatCurrency(selectedRentalRate[transactionForm.rateUnit])} x{' '}
-                          {Math.max(1, Number(transactionForm.duration) || 1)} {selectedRateOption.unitLabel} ={' '}
-                          {formatCurrency(calculatedRentalAmount)}
+                          {formatCurrency(selectedRentalRate.price)} - {formatCurrency(selectedRentalRate.cost)} ={' '}
+                          {formatCurrency(calculatedRentalProfit)}
                         </span>
                       </div>
                     </div>
@@ -1162,7 +1143,7 @@ export default function App() {
                     }}
                     className="mt-2 text-xs font-black text-sky-700 transition hover:text-sky-900"
                   >
-                    Pakai harga dinamis
+                    Pakai harga tamu dinamis
                   </button>
                 ) : null}
               </div>
@@ -1236,7 +1217,7 @@ export default function App() {
         </div>
         <h3 className="text-lg font-black text-slate-950">Harga Sewa</h3>
         <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-          Atur tarif per tipe sepeda untuk perhitungan transaksi.
+          Atur modal bengkel dan harga tamu per tipe sepeda.
         </p>
         <div className="mt-5 inline-flex items-center gap-2 text-xs font-black uppercase tracking-wide text-emerald-700">
           Buka Harga <ArrowUpRight size={15} />
@@ -1292,23 +1273,23 @@ export default function App() {
         />
         <KpiCard
           icon={Clock}
-          label="Tarif Per Jam"
+          label="Modal Rata-rata"
           value={formatCurrency(
-            bikeTypes.reduce((total, type) => total + ({ ...defaultRentalRate, ...rentalRates[type] }).hourly, 0) /
+            bikeTypes.reduce((total, type) => total + normalizeRentalRate(rentalRates[type]).cost, 0) /
               Math.max(1, bikeTypes.length),
           )}
-          helper="Rata-rata semua tipe"
-          accentClass="bg-emerald-50 text-emerald-700"
+          helper="Biaya bengkel per sepeda"
+          accentClass="bg-rose-50 text-rose-700"
         />
         <KpiCard
           icon={Calendar}
-          label="Tarif Per Hari"
+          label="Harga Tamu"
           value={formatCurrency(
-            bikeTypes.reduce((total, type) => total + ({ ...defaultRentalRate, ...rentalRates[type] }).daily, 0) /
+            bikeTypes.reduce((total, type) => total + normalizeRentalRate(rentalRates[type]).price, 0) /
               Math.max(1, bikeTypes.length),
           )}
-          helper="Rata-rata semua tipe"
-          accentClass="bg-violet-50 text-violet-700"
+          helper="Rata-rata jual ke tamu"
+          accentClass="bg-emerald-50 text-emerald-700"
         />
       </div>
 
@@ -1316,7 +1297,9 @@ export default function App() {
         <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-base font-black text-slate-950">Daftar Harga Sewa</h2>
-            <p className="mt-1 text-xs font-semibold text-slate-500">Tarif otomatis mengikuti tipe unit di katalog.</p>
+            <p className="mt-1 text-xs font-semibold text-slate-500">
+              Modal bengkel dan harga tamu otomatis mengikuti tipe unit di katalog.
+            </p>
           </div>
           <span className="rounded-md bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
             {bikeTypes.length} tipe
@@ -1329,15 +1312,16 @@ export default function App() {
               <tr className="border-b border-slate-200 bg-slate-50">
                 <th className="px-5 py-4 text-xs font-black uppercase tracking-wide text-slate-500">Tipe Sepeda</th>
                 <th className="px-5 py-4 text-xs font-black uppercase tracking-wide text-slate-500">Jumlah Unit</th>
-                <th className="px-5 py-4 text-xs font-black uppercase tracking-wide text-slate-500">Harga Per Jam</th>
-                <th className="px-5 py-4 text-xs font-black uppercase tracking-wide text-slate-500">Harga Per Hari</th>
-                <th className="px-5 py-4 text-xs font-black uppercase tracking-wide text-slate-500">Preview</th>
+                <th className="px-5 py-4 text-xs font-black uppercase tracking-wide text-slate-500">Modal</th>
+                <th className="px-5 py-4 text-xs font-black uppercase tracking-wide text-slate-500">Harga Tamu</th>
+                <th className="px-5 py-4 text-xs font-black uppercase tracking-wide text-slate-500">Laba</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {bikeTypes.map((bikeType) => {
-                const rate = { ...defaultRentalRate, ...rentalRates[bikeType] };
+                const rate = normalizeRentalRate(rentalRates[bikeType]);
                 const unitCount = bikes.filter((bike) => bike.type === bikeType).length;
+                const margin = rate.price - rate.cost;
 
                 return (
                   <tr key={bikeType} className="transition hover:bg-slate-50">
@@ -1358,8 +1342,8 @@ export default function App() {
                         min="0"
                         step="1000"
                         className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-bold text-slate-800 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
-                        value={rate.hourly}
-                        onChange={(event) => updateRentalRate(bikeType, 'hourly', event.target.value)}
+                        value={rate.cost}
+                        onChange={(event) => updateRentalRate(bikeType, 'cost', event.target.value)}
                       />
                     </td>
                     <td className="px-5 py-4">
@@ -1368,17 +1352,23 @@ export default function App() {
                         min="0"
                         step="1000"
                         className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-bold text-slate-800 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
-                        value={rate.daily}
-                        onChange={(event) => updateRentalRate(bikeType, 'daily', event.target.value)}
+                        value={rate.price}
+                        onChange={(event) => updateRentalRate(bikeType, 'price', event.target.value)}
                       />
                     </td>
                     <td className="px-5 py-4">
                       <div className="space-y-1 text-xs font-bold text-slate-500">
                         <p>
-                          2 jam: <span className="font-black text-emerald-700">{formatCurrency(rate.hourly * 2)}</span>
+                          Modal: <span className="font-black text-rose-700">{formatCurrency(rate.cost)}</span>
                         </p>
                         <p>
-                          1 hari: <span className="font-black text-sky-700">{formatCurrency(rate.daily)}</span>
+                          Tamu: <span className="font-black text-emerald-700">{formatCurrency(rate.price)}</span>
+                        </p>
+                        <p>
+                          Laba:{' '}
+                          <span className={`font-black ${margin >= 0 ? 'text-sky-700' : 'text-rose-700'}`}>
+                            {formatCurrency(margin)}
+                          </span>
                         </p>
                       </div>
                     </td>
