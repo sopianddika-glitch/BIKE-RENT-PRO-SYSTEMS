@@ -1,0 +1,19 @@
+{
+  "name": "Bike Rent Pro Systems",
+  "short_name": "Bike Rent Pro",
+  "description": "Dashboard operasional untuk armada dan keuangan rental sepeda.",
+  "lang": "id-ID",
+  "start_url": "/BIKE-RENT-PRO-SYSTEMS/",
+  "scope": "/BIKE-RENT-PRO-SYSTEMS/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#020617",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
