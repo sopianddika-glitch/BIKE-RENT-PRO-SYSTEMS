@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-export default defineConfig(({ command }) => ({
-  base: command === 'build' ? '/BIKE-RENT-PRO-SYSTEMS/' : '/',
+export default defineConfig(({ command, mode }) => ({
+  base: command === 'serve' && mode === 'development' ? '/' : '/BIKE-RENT-PRO-SYSTEMS/',
   plugins: [react()],
 }));

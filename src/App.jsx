@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   ArrowUpRight,
@@ -72,13 +72,18 @@ const emptyTransactionForm = () => ({
 });
 
 const navigationItems = [
-  { id: 'dashboard', icon: LayoutDashboard, title: 'Dashboard' },
+  { id: 'dashboard', icon: LayoutDashboard, title: 'Overview' },
   { id: 'sepeda', icon: Bike, title: 'Katalog' },
-  { id: 'keuangan', icon: Wallet, title: 'Audit' },
+  { id: 'keuangan', icon: Wallet, title: 'Keuangan' },
   { id: 'settings', icon: Settings, title: 'Sistem' },
 ];
 
-const dashboardStatuses = ['tersedia', 'disewa', 'bengkel', 'hilang'];
+const dashboardStatusCards = [
+  { id: 'siap-sewa', status: 'tersedia' },
+  { id: 'disewa', status: 'disewa' },
+  { id: 'bengkel', status: 'bengkel' },
+  { id: 'hilang', status: 'hilang' },
+];
 const rentableStatuses = ['tersedia', 'baru'];
 const defaultRentalRate = { cost: 30000, price: 50000 };
 
@@ -146,8 +151,11 @@ export default function App() {
   const [bikeForm, setBikeForm] = useState(emptyBikeForm);
   const [bikeFormError, setBikeFormError] = useState('');
   const [deleteBikeId, setDeleteBikeId] = useState(null);
+  const [deleteTransactionId, setDeleteTransactionId] = useState(null);
   const [transactionForm, setTransactionForm] = useState(emptyTransactionForm);
   const [transactionFormError, setTransactionFormError] = useState('');
+  const [notice, setNotice] = useState(null);
+  const transactionBikeRef = useRef(null);
 
   useEffect(() => {
     saveState(STORAGE_KEYS.bikes, bikes);
@@ -160,6 +168,28 @@ export default function App() {
   useEffect(() => {
     saveState(STORAGE_KEYS.rentalRates, rentalRates);
   }, [rentalRates]);
+
+  useEffect(() => {
+    if (!notice) return undefined;
+
+    const timeoutId = window.setTimeout(() => setNotice(null), 4000);
+    return () => window.clearTimeout(timeoutId);
+  }, [notice]);
+
+  const showNotice = (message, tone = 'success') => {
+    setNotice({ id: Date.now(), message, tone });
+  };
+
+  const navigateTo = (tab, view = 'menu', focusTransaction = false) => {
+    setActiveTab(tab);
+    setSettingsView(view);
+    setIsDatePickerOpen(false);
+
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (focusTransaction) transactionBikeRef.current?.focus();
+    });
+  };
 
   const effectiveDateRange = useMemo(() => {
     if (quickFilter === 'custom') return dateRange;
@@ -229,18 +259,28 @@ export default function App() {
       .filter((transaction) => transaction.type === 'pengeluaran')
       .reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
     const pengeluaran = setoranRental + pengeluaranOperasional;
-    const transaksiSewa = filteredTransactions.filter(
-      (transaction) => transaction.type === 'pendapatan' && Number(transaction.costAmount || 0) > 0,
-    ).length;
+    const transaksiBelumDisetor = filteredTransactions.filter(
+      (transaction) =>
+        transaction.type === 'pendapatan' && Number(transaction.costAmount || 0) > 0 && !transaction.settled,
+    );
+    const setoranBelumDisetor = transaksiBelumDisetor.reduce(
+      (total, transaction) => total + Number(transaction.costAmount || 0),
+      0,
+    );
+    const setoranSudahDisetor = setoranRental - setoranBelumDisetor;
+    const siapSewa = bikes.filter((bike) => rentableStatuses.includes(bike.status));
 
     return {
       ...statusGroups,
-      totalMilikKita: statusGroups.tersedia.length + statusGroups.disewa.length,
+      siapSewa,
+      totalMilikKita: siapSewa.length + statusGroups.disewa.length,
       pendapatan,
       setoranRental,
+      setoranBelumDisetor,
+      setoranSudahDisetor,
+      transaksiBelumDisetor: transaksiBelumDisetor.length,
       pengeluaranOperasional,
       pengeluaran,
-      transaksiSewa,
       laba: pendapatan - pengeluaran,
     };
   }, [bikes, filteredTransactions]);
@@ -358,6 +398,8 @@ export default function App() {
       return;
     }
 
+    const wasEditing = Boolean(editingBike);
+
     if (editingBike) {
       setBikes((currentBikes) =>
         currentBikes.map((bike) =>
@@ -381,16 +423,21 @@ export default function App() {
     }
 
     resetBikeForm();
+    showNotice(wasEditing ? `Unit ${normalizedNumber} berhasil diperbarui.` : `Unit ${normalizedNumber} berhasil ditambahkan.`);
   };
 
   const handleDeleteBike = (id) => {
+    const deletedBike = bikes.find((bike) => bike.id === id);
     setBikes((currentBikes) => currentBikes.filter((bike) => bike.id !== id));
     setDeleteBikeId(null);
     if (editingBike?.id === id) resetBikeForm();
+    showNotice(`Unit ${deletedBike?.number || ''} telah dihapus.`, 'warning');
   };
 
   const updateBikeStatus = (id, status) => {
     setBikes((currentBikes) => currentBikes.map((bike) => (bike.id === id ? { ...bike, status } : bike)));
+    const bike = bikes.find((item) => item.id === id);
+    showNotice(`Status ${bike?.number || 'unit'} menjadi ${STATUS_META[status]?.label || status}.`);
   };
 
   const handleAddTransaction = (event) => {
@@ -434,6 +481,8 @@ export default function App() {
         bikeNumber: shouldRentBike ? selectedBike.number : null,
         costAmount: shouldRentBike ? costAmount : 0,
         grossProfit: shouldRentBike ? amount - costAmount : null,
+        settled: shouldRentBike ? false : null,
+        settledAt: null,
       },
       ...currentTransactions,
     ]);
@@ -446,10 +495,31 @@ export default function App() {
 
     setTransactionFormError('');
     setTransactionForm(emptyTransactionForm());
+    showNotice(
+      shouldRentBike
+        ? `Sewa ${selectedBike.number} tercatat dan unit berstatus Disewa.`
+        : 'Transaksi berhasil disimpan.',
+    );
   };
 
   const handleDeleteTransaction = (id) => {
     setTransactions((currentTransactions) => currentTransactions.filter((transaction) => transaction.id !== id));
+    setDeleteTransactionId(null);
+    showNotice('Transaksi telah dihapus.', 'warning');
+  };
+
+  const handleToggleSettlement = (id) => {
+    const transaction = transactions.find((item) => item.id === id);
+    const nextSettled = !transaction?.settled;
+
+    setTransactions((currentTransactions) =>
+      currentTransactions.map((item) =>
+        item.id === id
+          ? { ...item, settled: nextSettled, settledAt: nextSettled ? new Date().toISOString() : null }
+          : item,
+      ),
+    );
+    showNotice(nextSettled ? 'Setoran rental ditandai sudah dibayar.' : 'Setoran dikembalikan ke daftar belum dibayar.');
   };
 
   const updateRentalRate = (bikeType, field, value) => {
@@ -465,6 +535,7 @@ export default function App() {
 
   const resetRentalRates = () => {
     setRentalRates(initialRentalRates);
+    showNotice('Harga sewa dikembalikan ke nilai awal.', 'warning');
   };
 
   const handleResetDemoData = () => {
@@ -473,6 +544,8 @@ export default function App() {
     setRentalRates(initialRentalRates);
     resetBikeForm();
     setDeleteBikeId(null);
+    setDeleteTransactionId(null);
+    showNotice('Seluruh data demo berhasil dipulihkan.', 'warning');
   };
 
   const pageTitle =
@@ -487,6 +560,20 @@ export default function App() {
             : settingsView === 'harga'
               ? 'Pengaturan Harga'
               : 'Sistem Konfigurasi';
+
+  useEffect(() => {
+    const description =
+      activeTab === 'dashboard'
+        ? 'Pantau armada, transaksi, laba, dan setoran rental sepeda secara real-time.'
+        : activeTab === 'sepeda'
+          ? 'Kelola katalog, kondisi, dan status ketersediaan armada sepeda.'
+          : activeTab === 'keuangan'
+            ? 'Catat pendapatan, pengeluaran, laba, dan penyelesaian setoran rental.'
+            : 'Atur armada dan harga sewa dinamis untuk operasional rental sepeda.';
+
+    document.title = `${pageTitle} | Bike Rent Pro Systems`;
+    document.querySelector('meta[name="description"]')?.setAttribute('content', description);
+  }, [activeTab, pageTitle]);
 
   const renderBikeMiniList = (items, emptyText = 'Tidak ada unit') =>
     items.length > 0 ? (
@@ -513,12 +600,13 @@ export default function App() {
   const renderDateFilter = () => (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Filter cepat periode">
           {quickFilters.map((filter) => (
             <button
               key={filter.id}
               type="button"
               onClick={() => handleQuickFilter(filter.id)}
+              aria-pressed={quickFilter === filter.id}
               className={`rounded-md px-4 py-2 text-xs font-black transition ${
                 quickFilter === filter.id
                   ? 'bg-slate-950 text-white shadow-sm'
@@ -536,13 +624,14 @@ export default function App() {
             onClick={() => setIsDatePickerOpen((isOpen) => !isOpen)}
             className="flex w-full min-w-[280px] items-center justify-between gap-4 rounded-md border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition hover:border-sky-300 focus:border-sky-400 focus:outline-none focus:ring-4 focus:ring-sky-100 sm:w-auto"
             aria-expanded={isDatePickerOpen}
+            aria-haspopup="dialog"
           >
             <span className="flex min-w-0 items-center gap-3">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-sky-50 text-sky-700">
                 <Calendar size={17} />
               </span>
               <span className="min-w-0">
-                <span className="block text-[10px] font-black uppercase tracking-wide text-slate-400">Periode</span>
+                <span className="block text-[10px] font-black uppercase tracking-wide text-slate-600">Periode</span>
                 <span className="block truncate text-sm font-black text-slate-800">{selectedDateRangeLabel}</span>
               </span>
             </span>
@@ -550,13 +639,18 @@ export default function App() {
           </button>
 
           {isDatePickerOpen ? (
-            <div className="absolute right-0 top-full z-30 mt-3 w-[min(92vw,380px)] rounded-lg border border-slate-200 bg-white p-4 shadow-2xl">
+            <div
+              className="absolute right-0 top-full z-30 mt-3 w-[min(92vw,380px)] rounded-lg border border-slate-200 bg-white p-4 shadow-2xl"
+              role="dialog"
+              aria-label="Kalender pemilih periode"
+            >
               <div className="mb-4 flex items-center justify-between gap-3">
                 <button
                   type="button"
                   onClick={() => setCalendarMonth((currentMonth) => addMonths(currentMonth, -1))}
                   className="rounded-md p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
                   title="Bulan sebelumnya"
+                  aria-label="Bulan sebelumnya"
                 >
                   <ChevronLeft size={18} />
                 </button>
@@ -571,6 +665,7 @@ export default function App() {
                   onClick={() => setCalendarMonth((currentMonth) => addMonths(currentMonth, 1))}
                   className="rounded-md p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
                   title="Bulan berikutnya"
+                  aria-label="Bulan berikutnya"
                 >
                   <ChevronRight size={18} />
                 </button>
@@ -596,6 +691,8 @@ export default function App() {
                       key={dateValue}
                       type="button"
                       onClick={() => handleCalendarDateSelect(dateValue)}
+                      aria-label={formatFullDate(dateValue)}
+                      aria-pressed={isWithinRange(dateValue, effectiveDateRange)}
                       className={`h-10 rounded-md text-sm font-bold transition ${
                         isSelected
                           ? 'bg-slate-950 text-white shadow-sm'
@@ -639,13 +736,55 @@ export default function App() {
     <div className="space-y-6">
       {renderDateFilter()}
 
+      <section className="flex flex-col gap-4 border-y border-slate-200 py-4 lg:flex-row lg:items-center lg:justify-between" aria-labelledby="quick-actions-title">
+        <div>
+          <h2 id="quick-actions-title" className="text-sm font-black text-slate-950">Aksi Cepat Operasional</h2>
+          <p className="mt-1 text-xs font-semibold text-slate-500">
+            {stats.disewa.length} unit disewa · {stats.transaksiBelumDisetor} setoran belum selesai
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <button
+            type="button"
+            onClick={() => {
+              setTransactionForm((currentForm) => ({ ...currentForm, type: 'pendapatan' }));
+              navigateTo('keuangan', 'menu', true);
+            }}
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-950 px-4 py-3 text-xs font-black text-white transition hover:bg-sky-700"
+          >
+            <PlusCircle size={17} />
+            Catat Sewa
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSearchTerm('disewa');
+              navigateTo('sepeda');
+            }}
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-sky-50 px-4 py-3 text-xs font-black text-sky-800 ring-1 ring-sky-200 transition hover:bg-sky-100"
+          >
+            <CheckCircle2 size={17} />
+            Pengembalian ({stats.disewa.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => navigateTo('keuangan')}
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-rose-50 px-4 py-3 text-xs font-black text-rose-800 ring-1 ring-rose-200 transition hover:bg-rose-100"
+          >
+            <Wallet size={17} />
+            Setoran {formatCurrency(stats.setoranBelumDisetor)}
+          </button>
+        </div>
+      </section>
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <button
-          type="button"
-          onClick={() => toggleExpand('aset-aktif')}
-          className="rounded-lg border border-slate-800 bg-slate-950 p-6 text-left text-white shadow-soft transition hover:bg-slate-900 md:col-span-2 xl:col-span-4"
-        >
-          <div className="flex items-start justify-between gap-4">
+        <section className="rounded-lg border border-slate-800 bg-slate-950 p-6 text-left text-white shadow-soft md:col-span-2 xl:col-span-4">
+          <button
+            type="button"
+            onClick={() => toggleExpand('aset-aktif')}
+            className="flex w-full items-start justify-between gap-4 text-left"
+            aria-expanded={expandedCard === 'aset-aktif'}
+          >
             <div>
               <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Aset aktif</p>
               <p className="mt-2 text-4xl font-black tracking-tight">
@@ -656,15 +795,15 @@ export default function App() {
             <div className="rounded-lg bg-white/10 p-3">
               {expandedCard === 'aset-aktif' ? <ChevronUp size={22} /> : <ChevronDown size={22} />}
             </div>
-          </div>
+          </button>
 
           {expandedCard === 'aset-aktif' ? (
             <div className="mt-6 grid gap-4 border-t border-white/10 pt-5 md:grid-cols-2">
               <div>
                 <p className="mb-3 text-xs font-black uppercase tracking-wide text-emerald-300">
-                  Parkir siap sewa ({stats.tersedia.length})
+                  Parkir siap sewa ({stats.siapSewa.length})
                 </p>
-                {renderBikeMiniList(stats.tersedia)}
+                {renderBikeMiniList(stats.siapSewa)}
               </div>
               <div>
                 <p className="mb-3 text-xs font-black uppercase tracking-wide text-sky-300">
@@ -674,25 +813,26 @@ export default function App() {
               </div>
             </div>
           ) : null}
-        </button>
+        </section>
 
-        {dashboardStatuses.map((status) => {
+        {dashboardStatusCards.map(({ id, status }) => {
           const meta = STATUS_META[status];
           const Icon = statusIcons[status];
-          const items = stats[status];
-          const isExpanded = expandedCard === status;
+          const items = id === 'siap-sewa' ? stats.siapSewa : stats[status];
+          const isExpanded = expandedCard === id;
 
           return (
             <div
-              key={status}
+              key={id}
               className={`rounded-lg border bg-white p-5 shadow-soft transition ${meta.borderClass} ${
                 isExpanded ? 'xl:row-span-2' : ''
               }`}
             >
               <button
                 type="button"
-                onClick={() => toggleExpand(status)}
+                onClick={() => toggleExpand(id)}
                 className="flex w-full items-start justify-between gap-4 text-left"
+                aria-expanded={isExpanded}
               >
                 <div className={`rounded-lg p-3 ${meta.iconClass}`}>
                   <Icon size={22} />
@@ -718,9 +858,9 @@ export default function App() {
         />
         <KpiCard
           icon={Wallet}
-          label="Setoran Rental"
-          value={formatCurrency(stats.setoranRental)}
-          helper={`${stats.transaksiSewa} unit sewa wajib disetor`}
+          label="Setoran Belum Dibayar"
+          value={formatCurrency(stats.setoranBelumDisetor)}
+          helper={`${stats.transaksiBelumDisetor} transaksi menunggu setoran`}
           accentClass="bg-sky-50 text-sky-700"
         />
         <KpiCard
@@ -759,7 +899,9 @@ export default function App() {
           <div className="relative min-w-0 sm:min-w-[320px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input
+              id="catalog-search"
               type="text"
+              aria-label="Cari unit di katalog"
               placeholder="Cari nomor, tipe, status, catatan..."
               className="w-full rounded-md border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm font-semibold outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
               value={searchTerm}
@@ -811,6 +953,7 @@ export default function App() {
                       <select
                         value={bike.status}
                         onChange={(event) => updateBikeStatus(bike.id, event.target.value)}
+                        aria-label={`Status unit ${bike.number}`}
                         className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                       >
                         {BIKE_STATUSES.map((status) => (
@@ -822,6 +965,17 @@ export default function App() {
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-2">
+                        {bike.status === 'disewa' ? (
+                          <button
+                            type="button"
+                            onClick={() => updateBikeStatus(bike.id, 'tersedia')}
+                            className="inline-flex items-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-100"
+                            title="Tandai unit sudah kembali"
+                          >
+                            <CheckCircle2 size={15} />
+                            Kembalikan
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => startEditBike(bike)}
@@ -1013,14 +1167,49 @@ export default function App() {
                               <p className={`text-sm font-black ${isIncome ? 'text-emerald-700' : 'text-rose-700'}`}>
                                 {isIncome ? '+' : '-'} {formatCurrency(transaction.amount)}
                               </p>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteTransaction(transaction.id)}
-                                className="rounded-md p-2 text-slate-400 transition hover:bg-white hover:text-rose-600"
-                                title="Hapus transaksi"
-                              >
-                                <XCircle size={18} />
-                              </button>
+                              {transaction.costAmount ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleSettlement(transaction.id)}
+                                  className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-2 text-xs font-black transition ${
+                                    transaction.settled
+                                      ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                      : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                  }`}
+                                  title={transaction.settled ? 'Batalkan status setoran' : 'Tandai setoran sudah dibayar'}
+                                >
+                                  <CheckCircle2 size={16} />
+                                  {transaction.settled ? 'Disetor' : 'Setor'}
+                                </button>
+                              ) : null}
+                              {deleteTransactionId === transaction.id ? (
+                                <div className="flex items-center gap-1 rounded-md bg-rose-50 p-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteTransaction(transaction.id)}
+                                    className="rounded px-2 py-1.5 text-xs font-black text-rose-700 transition hover:bg-rose-100"
+                                  >
+                                    Hapus
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeleteTransactionId(null)}
+                                    className="rounded px-2 py-1.5 text-xs font-black text-slate-600 transition hover:bg-white"
+                                  >
+                                    Batal
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteTransactionId(transaction.id)}
+                                  className="rounded-md p-2 text-slate-400 transition hover:bg-white hover:text-rose-600"
+                                  title="Hapus transaksi"
+                                  aria-label={`Hapus transaksi ${transaction.note}`}
+                                >
+                                  <XCircle size={18} />
+                                </button>
+                              )}
                             </div>
                           </div>
                         );
@@ -1043,8 +1232,9 @@ export default function App() {
             </h3>
             <div className="space-y-4">
               <div>
-                <label className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Tanggal</label>
+                <label htmlFor="transaction-date" className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Tanggal</label>
                 <input
+                  id="transaction-date"
                   type="date"
                   className="w-full rounded-md border border-slate-200 px-3 py-3 text-sm font-semibold outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                   value={transactionForm.date}
@@ -1055,8 +1245,9 @@ export default function App() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Jenis</label>
+                <label htmlFor="transaction-type" className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Jenis</label>
                 <select
+                  id="transaction-type"
                   className="w-full rounded-md border border-slate-200 px-3 py-3 text-sm font-semibold outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                   value={transactionForm.type}
                   onChange={(event) => {
@@ -1076,8 +1267,10 @@ export default function App() {
               {transactionForm.type === 'pendapatan' ? (
                 <>
                   <div>
-                    <label className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Unit Disewa</label>
+                    <label htmlFor="transaction-bike" className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Unit Disewa</label>
                     <select
+                      id="transaction-bike"
+                      ref={transactionBikeRef}
                       className="w-full rounded-md border border-slate-200 px-3 py-3 text-sm font-semibold outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100 disabled:bg-slate-100 disabled:text-slate-400"
                       value={transactionForm.bikeId}
                       disabled={rentableBikes.length === 0}
@@ -1135,8 +1328,9 @@ export default function App() {
                 </>
               ) : null}
               <div>
-                <label className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Nominal</label>
+                <label htmlFor="transaction-amount" className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Nominal</label>
                 <input
+                  id="transaction-amount"
                   type="number"
                   min="0"
                   step="1000"
@@ -1166,8 +1360,9 @@ export default function App() {
                 ) : null}
               </div>
               <div>
-                <label className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Catatan</label>
+                <label htmlFor="transaction-note" className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Catatan</label>
                 <textarea
+                  id="transaction-note"
                   rows="3"
                   placeholder="Contoh: Sewa 3 jam atau servis rantai"
                   className="w-full resize-none rounded-md border border-slate-200 px-3 py-3 text-sm font-semibold outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
@@ -1194,12 +1389,21 @@ export default function App() {
           </form>
 
           <div className="rounded-lg border border-slate-800 bg-slate-950 p-5 text-white shadow-soft">
-            <p className="text-xs font-black uppercase tracking-wide text-slate-400">Target bulanan</p>
-            <p className="mt-2 text-3xl font-black">Rp25.000.000</p>
+            <p className="text-xs font-black uppercase tracking-wide text-slate-400">Status Setoran Rental</p>
+            <p className="mt-2 text-3xl font-black">{formatCurrency(stats.setoranBelumDisetor)}</p>
+            <p className="mt-1 text-xs font-semibold text-slate-400">Belum dibayar ke bengkel</p>
             <div className="mt-5 h-3 overflow-hidden rounded-full bg-white/10">
-              <div className="h-full w-[65%] rounded-full bg-sky-400" />
+              <div
+                className="h-full rounded-full bg-emerald-400 transition-all"
+                style={{
+                  width: `${stats.setoranRental > 0 ? Math.round((stats.setoranSudahDisetor / stats.setoranRental) * 100) : 0}%`,
+                }}
+              />
             </div>
-            <p className="mt-2 text-xs font-bold text-slate-400">65% dari target tercapai</p>
+            <div className="mt-3 flex items-center justify-between gap-4 text-xs font-bold text-slate-400">
+              <span>Sudah disetor</span>
+              <span>{formatCurrency(stats.setoranSudahDisetor)} dari {formatCurrency(stats.setoranRental)}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -1207,7 +1411,7 @@ export default function App() {
   );
 
   const renderSettingsMenu = () => (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <button
         type="button"
         onClick={() => setSettingsView('kustomisasi')}
@@ -1242,21 +1446,6 @@ export default function App() {
         </div>
       </button>
 
-      <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6">
-        <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-lg bg-white text-slate-400">
-          <Settings size={24} />
-        </div>
-        <h3 className="text-lg font-black text-slate-400">Profil Bisnis</h3>
-        <p className="mt-2 text-sm font-semibold leading-6 text-slate-400">Nama rental, alamat, dan kontak operasional.</p>
-      </div>
-
-      <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6">
-        <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-lg bg-white text-slate-400">
-          <CheckCircle2 size={24} />
-        </div>
-        <h3 className="text-lg font-black text-slate-400">Checklist Harian</h3>
-        <p className="mt-2 text-sm font-semibold leading-6 text-slate-400">Pemeriksaan unit sebelum dan sesudah sewa.</p>
-      </div>
     </div>
   );
 
@@ -1319,9 +1508,15 @@ export default function App() {
               Modal bengkel dan harga tamu otomatis mengikuti tipe unit di katalog.
             </p>
           </div>
-          <span className="rounded-md bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
-            {bikeTypes.length} tipe
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+              <CheckCircle2 size={14} />
+              Tersimpan otomatis
+            </span>
+            <span className="rounded-md bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+              {bikeTypes.length} tipe
+            </span>
+          </div>
         </div>
 
         <div className="custom-scrollbar overflow-x-auto">
@@ -1359,6 +1554,7 @@ export default function App() {
                         type="number"
                         min="0"
                         step="1000"
+                        aria-label={`Modal ${bikeType}`}
                         className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-bold text-slate-800 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
                         value={rate.cost}
                         onChange={(event) => updateRentalRate(bikeType, 'cost', event.target.value)}
@@ -1369,6 +1565,7 @@ export default function App() {
                         type="number"
                         min="0"
                         step="1000"
+                        aria-label={`Harga tamu ${bikeType}`}
                         className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm font-bold text-slate-800 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
                         value={rate.price}
                         onChange={(event) => updateRentalRate(bikeType, 'price', event.target.value)}
@@ -1432,8 +1629,9 @@ export default function App() {
           </h3>
           <div className="space-y-4">
             <div>
-              <label className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Nomor Seri/Plat</label>
+              <label htmlFor="bike-number" className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Nomor Seri/Plat</label>
               <input
+                id="bike-number"
                 type="text"
                 placeholder="Contoh: S-011"
                 className="w-full rounded-md border border-slate-200 px-3 py-3 text-sm font-semibold uppercase outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
@@ -1442,8 +1640,9 @@ export default function App() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Tipe Sepeda</label>
+              <label htmlFor="bike-type" className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Tipe Sepeda</label>
               <input
+                id="bike-type"
                 type="text"
                 placeholder="Contoh: Electric Scooter"
                 className="w-full rounded-md border border-slate-200 px-3 py-3 text-sm font-semibold outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
@@ -1452,8 +1651,9 @@ export default function App() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Status</label>
+              <label htmlFor="bike-status" className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Status</label>
               <select
+                id="bike-status"
                 className="w-full rounded-md border border-slate-200 px-3 py-3 text-sm font-semibold outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
                 value={bikeForm.status}
                 onChange={(event) => setBikeForm({ ...bikeForm, status: event.target.value })}
@@ -1466,8 +1666,9 @@ export default function App() {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Catatan</label>
+              <label htmlFor="bike-note" className="mb-1 block text-xs font-black uppercase tracking-wide text-slate-500">Catatan</label>
               <textarea
+                id="bike-note"
                 rows="4"
                 placeholder="Kondisi unit, lokasi parkir, penyewa, atau catatan bengkel"
                 className="w-full resize-none rounded-md border border-slate-200 px-3 py-3 text-sm font-semibold outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
@@ -1580,7 +1781,16 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
-      <nav className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur">
+      <a
+        href="#main-content"
+        className="fixed left-4 top-3 z-[60] -translate-y-20 rounded-md bg-slate-950 px-4 py-2 text-sm font-black text-white transition focus:translate-y-0"
+      >
+        Lewati ke konten utama
+      </a>
+      <nav
+        className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur"
+        aria-label="Navigasi utama"
+      >
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-950 text-white shadow-soft">
@@ -1601,17 +1811,16 @@ export default function App() {
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => {
-                    setActiveTab(item.id);
-                    setSettingsView('menu');
-                  }}
+                  onClick={() => navigateTo(item.id)}
                   title={item.title}
-                  className={`relative rounded-md p-3 transition ${
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`relative inline-flex min-h-11 items-center justify-center gap-2 rounded-md px-3 py-2.5 transition ${
                     isActive ? 'bg-white text-sky-700 shadow-sm' : 'text-slate-500 hover:text-slate-900'
                   }`}
                 >
                   <Icon size={20} />
-                  <span className="sr-only">{item.title}</span>
+                  <span className="hidden text-xs font-black xl:inline">{item.title}</span>
+                  <span className="sr-only xl:hidden">{item.title}</span>
                 </button>
               );
             })}
@@ -1622,14 +1831,18 @@ export default function App() {
               <p className="text-xs font-black text-slate-900">Admin Utama</p>
               <p className="text-[10px] font-bold text-slate-500">Operasional</p>
             </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm">
+            <div
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm"
+              role="img"
+              aria-label="Profil Admin Utama"
+            >
               <User size={19} />
             </div>
           </div>
         </div>
       </nav>
 
-      <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
+      <main id="main-content" className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-10" tabIndex="-1">
         <div className="mb-8">
           <p className="text-xs font-black uppercase tracking-[0.2em] text-sky-700">Sistem Monitoring Bisnis</p>
           <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">{pageTitle}</h1>
@@ -1646,6 +1859,29 @@ export default function App() {
               : renderBikeManagement()
           : null}
       </main>
+
+      <div className="pointer-events-none fixed bottom-4 right-4 z-50 w-[min(92vw,380px)]" aria-live="polite" aria-atomic="true">
+        {notice ? (
+          <div
+            key={notice.id}
+            className={`flex items-start gap-3 rounded-lg border bg-white p-4 shadow-2xl ${
+              notice.tone === 'warning' ? 'border-amber-200' : 'border-emerald-200'
+            }`}
+          >
+            <div
+              className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${
+                notice.tone === 'warning' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
+              }`}
+            >
+              {notice.tone === 'warning' ? <AlertCircle size={17} /> : <CheckCircle2 size={17} />}
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-slate-400">Pembaruan data</p>
+              <p className="mt-1 text-sm font-bold text-slate-800">{notice.message}</p>
+            </div>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

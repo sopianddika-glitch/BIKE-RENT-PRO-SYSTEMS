@@ -1,8 +1,14 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('./assets/plus-jakarta-sans-latin.woff2') format('woff2');
+}
 
 :root {
   color: #0f172a;
@@ -28,6 +34,11 @@ body {
   font-family: 'Plus Jakarta Sans', Inter, system-ui, sans-serif;
 }
 
+::selection {
+  color: #020617;
+  background: #bae6fd;
+}
+
 button,
 input,
 select,
@@ -37,6 +48,11 @@ textarea {
 
 button {
   cursor: pointer;
+}
+
+:focus-visible {
+  outline: 3px solid #38bdf8;
+  outline-offset: 3px;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -51,4 +67,19 @@ button {
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }

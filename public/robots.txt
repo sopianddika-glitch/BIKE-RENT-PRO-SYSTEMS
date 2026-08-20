@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://sopianddika-glitch.github.io/BIKE-RENT-PRO-SYSTEMS/sitemap.xml

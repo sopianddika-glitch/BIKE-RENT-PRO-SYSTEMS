@@ -3,6 +3,8 @@ dist
 .devserver
 .playwright-cli
 output
+test-results
+playwright-report
 .env
 .env.*
 .DS_Store
