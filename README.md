@@ -1,24 +1,27 @@
 # BIKE RENT PRO SYSTEMS
 
-Dashboard operasional responsif untuk manajemen armada, penyewaan, pengembalian, audit keuangan, dan pelacakan setoran rental sepeda.
+Konsol operasional responsif untuk mengelola armada, penyewaan, pengembalian, audit keuangan, harga dinamis, dan setoran rental sepeda.
 
 ## Alur Operasional
 
-1. Pilih **Catat Sewa** dari dashboard.
+1. Pilih **Mulai Sewa** dari Pusat Operasi atau buka menu **Penyewaan**.
 2. Pilih unit katalog; harga tamu, modal, dan laba dihitung otomatis dari tipe sepeda.
-3. Simpan transaksi; status unit otomatis berubah menjadi **Disewa**.
-4. Tandai modal transaksi sebagai **Disetor** pada Audit Keuangan.
-5. Pilih **Kembalikan** pada Katalog ketika unit selesai disewa.
+3. Isi identitas tamu lalu aktifkan penyewaan; status unit otomatis berubah menjadi **Disewa**.
+4. Tandai modal transaksi sebagai **Disetor** pada halaman **Keuangan**.
+5. Pilih **Selesaikan & Kembalikan** saat unit kembali agar tersedia untuk tamu berikutnya.
 
 Data aplikasi disimpan otomatis di `localStorage` browser.
 
 ## Fitur Utama
 
 - Filter harian sebagai default, filter cepat minggu/bulan/tahun, dan satu kalender rentang dinamis.
-- Dashboard real-time untuk armada, pendapatan, setoran belum dibayar, operasional, dan laba bersih.
+- Pusat Operasi real-time dengan pintasan sewa, pengembalian, dan setoran.
+- Halaman Penyewaan khusus dengan tiga tahap yang ringkas: unit, tamu, dan konfirmasi.
+- Katalog Armada dengan pencarian, filter status, pengeditan, serta kontrol kondisi langsung.
 - Riwayat transaksi berkelompok per tanggal dengan ringkasan masuk, keluar, dan laba.
 - Harga modal dan harga tamu dinamis per tipe sepeda.
-- Navigasi responsif, akses keyboard, notifikasi tindakan, dan dukungan reduced-motion.
+- Backup JSON, impor data, dan pemulihan data demo dari Pengaturan Sistem.
+- Sidebar desktop, navigasi bawah mobile, akses keyboard, notifikasi tindakan, dan dukungan reduced-motion.
 - Metadata SEO, Open Graph, JSON-LD, sitemap, robots, manifest, dan social preview.
 
 ## Stack
@@ -33,26 +36,33 @@ Data aplikasi disimpan otomatis di `localStorage` browser.
 
 ```text
 .
-├── public/.nojekyll
-├── src
-│   ├── components
-│   │   ├── EmptyState.jsx
-│   │   ├── KpiCard.jsx
-│   │   └── StatusBadge.jsx
-│   ├── data/seed.js
-│   ├── lib
-│   │   ├── dateFilters.js
-│   │   ├── formatters.js
-│   │   └── storage.js
-│   ├── App.jsx
-│   ├── index.css
-│   └── main.jsx
-├── tests/e2e/app.spec.js
-├── index.html
-├── package.json
-├── playwright.config.js
-├── tailwind.config.js
-└── vite.config.js
+|-- public/
+|-- src/
+|   |-- components/
+|   |   |-- AppShell.jsx
+|   |   |-- DateRangeFilter.jsx
+|   |   |-- EmptyState.jsx
+|   |   `-- StatusBadge.jsx
+|   |-- data/seed.js
+|   |-- lib/
+|   |   |-- dateFilters.js
+|   |   |-- formatters.js
+|   |   `-- storage.js
+|   |-- pages/
+|   |   |-- DashboardPage.jsx
+|   |   |-- FinancePage.jsx
+|   |   |-- FleetPage.jsx
+|   |   |-- RentalPage.jsx
+|   |   `-- SettingsPage.jsx
+|   |-- App.jsx
+|   |-- index.css
+|   `-- main.jsx
+|-- tests/e2e/app.spec.js
+|-- index.html
+|-- package.json
+|-- playwright.config.js
+|-- tailwind.config.js
+`-- vite.config.js
 ```
 
 ## Menjalankan Lokal

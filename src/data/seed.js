@@ -1,4 +1,4 @@
-export const BIKE_STATUSES = ['tersedia', 'disewa', 'baru', 'bengkel', 'hilang'];
+export const BIKE_STATUSES = ['tersedia', 'disewa', 'bengkel', 'hilang'];
 
 export const STATUS_META = {
   tersedia: {
@@ -16,14 +16,6 @@ export const STATUS_META = {
     badgeClass: 'bg-sky-50 text-sky-700 ring-sky-200',
     iconClass: 'bg-sky-50 text-sky-700',
     borderClass: 'border-sky-200',
-  },
-  baru: {
-    label: 'Baru',
-    title: 'Unit Baru',
-    selectLabel: 'Unit Baru',
-    badgeClass: 'bg-violet-50 text-violet-700 ring-violet-200',
-    iconClass: 'bg-violet-50 text-violet-700',
-    borderClass: 'border-violet-200',
   },
   bengkel: {
     label: 'Bengkel',
@@ -50,7 +42,7 @@ export const initialBikes = [
   { id: 4, number: 'S-004', type: 'City Bike', status: 'tersedia', note: 'Parkir di blok A' },
   { id: 5, number: 'S-005', type: 'Mountain Bike', status: 'disewa', note: 'Penyewa: Siti (0856...)' },
   { id: 6, number: 'S-006', type: 'BMX', status: 'hilang', note: 'Terakhir terlihat di taman kota' },
-  { id: 7, number: 'S-007', type: 'Folding Bike', status: 'baru', note: 'Baru datang dari supplier' },
+  { id: 7, number: 'S-007', type: 'Folding Bike', status: 'tersedia', note: 'Unit siap disewa' },
 ];
 
 export const initialTransactions = [
