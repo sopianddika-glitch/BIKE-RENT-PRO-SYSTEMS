@@ -45,7 +45,7 @@ function Metric({ icon: Icon, label, value, meta, tone }) {
   );
 }
 
-export default function DashboardPage({ stats, dateFilter, recentTransactions, activeRentals, onNavigate, onReturnBike }) {
+export default function DashboardPage({ stats, dateFilter, recentTransactions, activeRentals, onNavigate, onStartRental, onReturnBike }) {
   const totalBikes = stats.tersedia.length + stats.disewa.length + stats.bengkel.length + stats.hilang.length;
 
   return (
@@ -70,7 +70,7 @@ export default function DashboardPage({ stats, dateFilter, recentTransactions, a
             </div>
           </div>
           <div className="grid grid-cols-1 border-t border-white/10 sm:grid-cols-3 lg:w-[510px] lg:border-l lg:border-t-0">
-            <button type="button" onClick={() => onNavigate('rental')} className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-4 text-left transition hover:bg-white/5 sm:border-b-0 sm:border-r">
+            <button type="button" onClick={onStartRental} className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-4 text-left transition hover:bg-white/5 sm:border-b-0 sm:border-r">
               <span>
                 <span className="block text-[10px] font-black uppercase tracking-wide text-cyan-300">Utama</span>
                 <span className="mt-1 block text-sm font-black">Mulai Sewa</span>
@@ -183,7 +183,7 @@ export default function DashboardPage({ stats, dateFilter, recentTransactions, a
               <div key={transaction.id} className="grid gap-2 px-5 py-4 sm:grid-cols-[1fr_auto_auto] sm:items-center">
                 <div className="min-w-0"><p className="truncate text-sm font-black text-slate-800">{transaction.note}</p><p className="mt-1 text-xs font-semibold text-slate-500">{formatDate(transaction.date)}</p></div>
                 <p className={`text-sm font-black ${transaction.type === 'pendapatan' ? 'text-emerald-700' : 'text-rose-700'}`}>{transaction.type === 'pendapatan' ? '+' : '-'} {formatCurrency(transaction.amount)}</p>
-                <span className="text-[10px] font-black uppercase tracking-wide text-slate-400">{transaction.category === 'rental' ? 'Sewa' : 'Manual'}</span>
+                <span className="text-[10px] font-black uppercase tracking-wide text-slate-600">{transaction.category === 'rental' ? transaction.rentalCode || 'Sewa' : 'Manual'}</span>
               </div>
             ))}
           </div>

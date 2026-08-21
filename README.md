@@ -5,10 +5,11 @@ Konsol operasional responsif untuk mengelola armada, penyewaan, pengembalian, au
 ## Alur Operasional
 
 1. Pilih **Mulai Sewa** dari Pusat Operasi atau buka menu **Penyewaan**.
-2. Pilih unit katalog; harga tamu, modal, dan laba dihitung otomatis dari tipe sepeda.
-3. Isi identitas tamu lalu aktifkan penyewaan; status unit otomatis berubah menjadi **Disewa**.
-4. Tandai modal transaksi sebagai **Disetor** pada halaman **Keuangan**.
-5. Pilih **Selesaikan & Kembalikan** saat unit kembali agar tersedia untuk tamu berikutnya.
+2. Pilih satu atau beberapa unit sekaligus dari popup penyewaan cepat.
+3. Isi identitas tamu satu kali; harga, modal, dan laba seluruh unit dihitung otomatis.
+4. Tinjau harga per unit lalu aktifkan penyewaan; semua status unit otomatis berubah menjadi **Disewa**.
+5. Tandai modal transaksi sebagai **Disetor** pada halaman **Keuangan**.
+6. Kembalikan unit satu per satu atau pilih **Kembalikan Semua** untuk satu pesanan.
 
 Data aplikasi disimpan otomatis di `localStorage` browser.
 
@@ -16,7 +17,8 @@ Data aplikasi disimpan otomatis di `localStorage` browser.
 
 - Filter harian sebagai default, filter cepat minggu/bulan/tahun, dan satu kalender rentang dinamis.
 - Pusat Operasi real-time dengan pintasan sewa, pengembalian, dan setoran.
-- Halaman Penyewaan khusus dengan tiga tahap yang ringkas: unit, tamu, dan konfirmasi.
+- Popup penyewaan multi-unit dengan pencarian, pilih semua, satu data tamu, serta harga per unit.
+- Pesanan berkelompok dengan kode transaksi dan pengembalian seluruh unit dalam satu klik.
 - Katalog Armada dengan pencarian, filter status, pengeditan, serta kontrol kondisi langsung.
 - Riwayat transaksi berkelompok per tanggal dengan ringkasan masuk, keluar, dan laba.
 - Harga modal dan harga tamu dinamis per tipe sepeda.

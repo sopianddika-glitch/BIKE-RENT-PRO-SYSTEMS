@@ -33,7 +33,7 @@ const getTodayInput = () => {
   return date.toISOString().slice(0, 10);
 };
 
-const createRentalForm = () => ({ date: getTodayInput(), bikeId: '', customerName: '', customerContact: '', amount: '', note: '' });
+const createRentalForm = () => ({ date: getTodayInput(), bikeIds: [], customerName: '', customerContact: '', prices: {}, note: '' });
 const createFinanceForm = () => ({ date: getTodayInput(), type: 'pengeluaran', amount: '', note: '' });
 
 const normalizeRentalRate = (rate = {}) => ({
@@ -51,6 +51,8 @@ const normalizeTransaction = (transaction) => ({
   category: transaction.category || (transaction.bikeId || Number(transaction.costAmount || 0) > 0 ? 'rental' : 'manual'),
   settled: Number(transaction.costAmount || 0) > 0 ? Boolean(transaction.settled) : null,
   returnedAt: transaction.returnedAt || null,
+  rentalGroupId: transaction.rentalGroupId || null,
+  rentalCode: transaction.rentalCode || null,
 });
 
 const loadBikes = () => {
@@ -81,6 +83,7 @@ export default function App() {
   const [financeForm, setFinanceForm] = useState(createFinanceForm);
   const [financeError, setFinanceError] = useState('');
   const [notice, setNotice] = useState(null);
+  const [rentalDialogRequest, setRentalDialogRequest] = useState(false);
 
   useEffect(() => saveState(STORAGE_KEYS.bikes, bikes), [bikes]);
   useEffect(() => saveState(STORAGE_KEYS.transactions, transactions), [transactions]);
@@ -162,8 +165,6 @@ export default function App() {
 
   const recentTransactions = useMemo(() => [...filteredTransactions].sort((first, second) => second.date.localeCompare(first.date) || second.id - first.id), [filteredTransactions]);
   const availableBikes = useMemo(() => bikes.filter((bike) => bike.status === 'tersedia'), [bikes]);
-  const selectedRentalBike = bikes.find((bike) => bike.id === Number(rentalForm.bikeId)) || null;
-  const selectedRentalRate = selectedRentalBike ? getRate(selectedRentalBike.type) : defaultRentalRate;
   const bikeTypes = useMemo(() => Array.from(new Set([...bikes.map((bike) => bike.type).filter(Boolean), ...Object.keys(rentalRates)])).sort((first, second) => first.localeCompare(second)), [bikes, rentalRates]);
 
   const handleQuickFilter = (filter, range) => { setQuickFilter(filter); setDateRange(range); };
@@ -172,9 +173,20 @@ export default function App() {
 
   const handleRentalChange = (field, value) => {
     setRentalError('');
-    if (field === 'bikeId') {
-      const bike = bikes.find((item) => item.id === Number(value));
-      setRentalForm((current) => ({ ...current, bikeId: value, amount: bike ? String(getRate(bike.type).price) : '' }));
+    if (field === 'bikeIds') {
+      const bikeIds = Array.from(new Set(value.map(Number))).filter((bikeId) => bikes.some((bike) => bike.id === bikeId));
+      setRentalForm((current) => {
+        const prices = bikeIds.reduce((nextPrices, bikeId) => {
+          const bike = bikes.find((item) => item.id === bikeId);
+          nextPrices[bikeId] = current.prices[bikeId] ?? String(getRate(bike?.type).price);
+          return nextPrices;
+        }, {});
+        return { ...current, bikeIds, prices };
+      });
+      return;
+    }
+    if (field === 'price') {
+      setRentalForm((current) => ({ ...current, prices: { ...current.prices, [value.bikeId]: value.amount } }));
       return;
     }
     setRentalForm((current) => ({ ...current, [field]: value }));
@@ -182,32 +194,82 @@ export default function App() {
 
   const handleCreateRental = (event) => {
     event.preventDefault();
-    const bike = bikes.find((item) => item.id === Number(rentalForm.bikeId));
-    const amount = Number(rentalForm.amount);
+    const selectedIds = new Set(rentalForm.bikeIds.map(Number));
+    const selectedBikes = bikes.filter((bike) => selectedIds.has(bike.id));
     const customerName = rentalForm.customerName.trim();
-    if (!bike || bike.status !== 'tersedia') { setRentalError('Pilih unit yang tersedia.'); return; }
-    if (!customerName || !rentalForm.date || amount <= 0) { setRentalError('Unit, nama tamu, tanggal, dan harga wajib diisi.'); return; }
+    if (!selectedBikes.length || selectedBikes.some((bike) => bike.status !== 'tersedia')) {
+      setRentalError('Pilih minimal satu unit yang tersedia.');
+      return { error: true };
+    }
+    if (!customerName || !rentalForm.date) {
+      setRentalError('Nama tamu dan tanggal sewa wajib diisi.');
+      return { error: true };
+    }
+    if (selectedBikes.some((bike) => Number(rentalForm.prices[bike.id]) <= 0)) {
+      setRentalError('Harga setiap unit harus lebih dari nol.');
+      return { error: true };
+    }
 
-    const rate = getRate(bike.type);
     const nextId = transactions.length ? Math.max(...transactions.map((transaction) => transaction.id)) + 1 : 1;
-    const transaction = {
-      id: nextId, date: rentalForm.date, type: 'pendapatan', category: 'rental', amount,
-      note: `Sewa ${bike.number} - ${customerName}${rentalForm.note.trim() ? ` - ${rentalForm.note.trim()}` : ''}`,
-      bikeId: bike.id, bikeNumber: bike.number, customerName, customerContact: rentalForm.customerContact.trim(), rentalNote: rentalForm.note.trim(),
-      costAmount: rate.cost, grossProfit: amount - rate.cost, settled: false, settledAt: null, returnedAt: null, returnDate: null,
-    };
-    setTransactions((current) => [transaction, ...current]);
-    setBikes((current) => current.map((item) => (item.id === bike.id ? { ...item, status: 'disewa' } : item)));
+    const rentalGroupId = `rental-${Date.now()}-${nextId}`;
+    const rentalCode = `SW-${rentalForm.date.replaceAll('-', '')}-${String(nextId).padStart(3, '0')}`;
+    const rentalNote = rentalForm.note.trim();
+    const customerContact = rentalForm.customerContact.trim();
+    const newTransactions = selectedBikes.map((bike, index) => {
+      const rate = getRate(bike.type);
+      const amount = Number(rentalForm.prices[bike.id]);
+      return {
+        id: nextId + index,
+        date: rentalForm.date,
+        type: 'pendapatan',
+        category: 'rental',
+        amount,
+        note: `Sewa ${bike.number} / ${customerName}${rentalNote ? ` / ${rentalNote}` : ''}`,
+        bikeId: bike.id,
+        bikeNumber: bike.number,
+        customerName,
+        customerContact,
+        rentalNote,
+        rentalGroupId,
+        rentalCode,
+        rentalUnitCount: selectedBikes.length,
+        costAmount: rate.cost,
+        grossProfit: amount - rate.cost,
+        settled: false,
+        settledAt: null,
+        returnedAt: null,
+        returnDate: null,
+      };
+    });
+    setTransactions((current) => [...newTransactions, ...current]);
+    setBikes((current) => current.map((item) => (selectedIds.has(item.id) ? { ...item, status: 'disewa' } : item)));
     setRentalForm(createRentalForm());
-    showNotice(`Penyewaan ${bike.number} untuk ${customerName} berhasil diaktifkan.`);
+    showNotice(`${selectedBikes.length} unit untuk ${customerName} berhasil diaktifkan.`);
+    return { success: true, rentalCode, unitCount: selectedBikes.length };
   };
 
-  const handleReturnBike = (bikeId) => {
-    const bike = bikes.find((item) => item.id === bikeId);
-    const activeTransaction = [...transactions].filter((transaction) => Number(transaction.bikeId) === bikeId && transaction.category === 'rental' && !transaction.returnedAt).sort((first, second) => second.id - first.id)[0];
-    setBikes((current) => current.map((item) => (item.id === bikeId ? { ...item, status: 'tersedia' } : item)));
-    if (activeTransaction) setTransactions((current) => current.map((transaction) => transaction.id === activeTransaction.id ? { ...transaction, returnedAt: new Date().toISOString(), returnDate: getTodayInput() } : transaction));
-    showNotice(`${bike?.number || 'Unit'} selesai disewa dan kembali tersedia.`);
+  const handleReturnBikes = (bikeIds) => {
+    const selectedIds = new Set(bikeIds.map(Number));
+    const selectedBikes = bikes.filter((bike) => selectedIds.has(bike.id) && bike.status === 'disewa');
+    if (!selectedBikes.length) return;
+    const returnedAt = new Date().toISOString();
+    const returnDate = getTodayInput();
+    setBikes((current) => current.map((item) => (selectedIds.has(item.id) ? { ...item, status: 'tersedia' } : item)));
+    setTransactions((current) => current.map((transaction) => (
+      selectedIds.has(Number(transaction.bikeId)) && transaction.category === 'rental' && !transaction.returnedAt
+        ? { ...transaction, returnedAt, returnDate }
+        : transaction
+    )));
+    showNotice(selectedBikes.length === 1
+      ? `${selectedBikes[0].number} selesai disewa dan kembali tersedia.`
+      : `${selectedBikes.length} unit selesai disewa dan kembali tersedia.`);
+  };
+
+  const handleReturnBike = (bikeId) => handleReturnBikes([bikeId]);
+
+  const handleStartRental = () => {
+    navigateTo('rental');
+    setRentalDialogRequest(true);
   };
 
   const handleFinanceChange = (field, value) => { setFinanceError(''); setFinanceForm((current) => ({ ...current, [field]: value })); };
@@ -272,7 +334,7 @@ export default function App() {
   };
 
   const handleExportData = () => {
-    const payload = JSON.stringify({ schemaVersion: 2, exportedAt: new Date().toISOString(), bikes, transactions, rentalRates }, null, 2);
+    const payload = JSON.stringify({ schemaVersion: 3, exportedAt: new Date().toISOString(), bikes, transactions, rentalRates }, null, 2);
     const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
     const link = document.createElement('a');
     link.href = url;
@@ -312,8 +374,8 @@ export default function App() {
 
   return (
     <AppShell activePage={activePage} onNavigate={navigateTo} pageTitle={meta.title} pageSubtitle={meta.subtitle} notice={notice}>
-      {activePage === 'dashboard' ? <DashboardPage stats={stats} dateFilter={dateFilter} recentTransactions={recentTransactions} activeRentals={activeRentals} onNavigate={navigateTo} onReturnBike={handleReturnBike} /> : null}
-      {activePage === 'rental' ? <RentalPage availableBikes={availableBikes} activeRentals={activeRentals} form={rentalForm} error={rentalError} selectedBike={selectedRentalBike} selectedRate={selectedRentalRate} onChange={handleRentalChange} onSubmit={handleCreateRental} onReturnBike={handleReturnBike} onNavigate={navigateTo} /> : null}
+      {activePage === 'dashboard' ? <DashboardPage stats={stats} dateFilter={dateFilter} recentTransactions={recentTransactions} activeRentals={activeRentals} onNavigate={navigateTo} onStartRental={handleStartRental} onReturnBike={handleReturnBike} /> : null}
+      {activePage === 'rental' ? <RentalPage availableBikes={availableBikes} activeRentals={activeRentals} form={rentalForm} error={rentalError} getRate={getRate} openRequest={rentalDialogRequest} onOpenRequestHandled={() => setRentalDialogRequest(false)} onChange={handleRentalChange} onSubmit={handleCreateRental} onReturnBike={handleReturnBike} onReturnBikes={handleReturnBikes} onNavigate={navigateTo} /> : null}
       {activePage === 'fleet' ? <FleetPage bikes={bikes} getRate={getRate} onSaveBike={handleSaveBike} onDeleteBike={handleDeleteBike} onStatusChange={handleStatusChange} /> : null}
       {activePage === 'finance' ? <FinancePage stats={stats} groups={transactionGroups} dateFilter={dateFilter} form={financeForm} error={financeError} onChange={handleFinanceChange} onSubmit={handleCreateFinance} onToggleSettlement={handleToggleSettlement} onDelete={handleDeleteTransaction} /> : null}
       {activePage === 'settings' ? <SettingsPage bikeTypes={bikeTypes} bikes={bikes} transactions={transactions} getRate={getRate} onRateChange={handleRateChange} onExport={handleExportData} onImport={handleImportData} onReset={handleResetData} /> : null}
