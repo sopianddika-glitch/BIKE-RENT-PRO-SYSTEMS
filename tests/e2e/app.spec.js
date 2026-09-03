@@ -74,6 +74,42 @@ test('armada baru dan harga dinamis terhubung ke penyewaan', async ({ page }) =>
   await expect(page.getByText('Rp 18.000', { exact: true })).toBeVisible();
 });
 
+test('pengaturan workflow mengendalikan penomoran dan dashboard secara dinamis', async ({ page }) => {
+  await page.getByRole('button', { name: 'Pengaturan' }).click();
+  await page.getByRole('tab', { name: 'Bisnis & Workflow' }).click();
+  await page.getByLabel('Nama usaha').fill('Rental Pantai Bali');
+  await page.getByLabel('Lokasi / etalase').fill('Etalase Sanur');
+  await page.getByLabel('Awalan unit').fill('BR');
+  await page.getByLabel('Jumlah digit').fill('4');
+  await page.getByLabel('Kode sewa').fill('RNT');
+  await expect(page.getByText('BR-0001', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Armada', exact: true }).click();
+  await page.getByRole('button', { name: 'Tambah Unit' }).click();
+  await expect(page.getByLabel('Nomor Unit')).toHaveValue('BR-0001');
+  await page.getByLabel('Tipe Sepeda').fill('Beach Cruiser');
+  await page.getByLabel('Catatan').fill('Stok etalase Sanur');
+  await page.getByRole('button', { name: 'Simpan Unit' }).click();
+
+  await page.getByRole('button', { name: 'Pengaturan' }).click();
+  await page.getByRole('tab', { name: 'Dashboard' }).click();
+  await page.getByLabel('Periode bawaan').selectOption('bulan');
+  await page.getByRole('switch', { name: 'Aktivitas terbaru' }).click();
+  await expect(page.getByRole('switch', { name: 'Aktivitas terbaru' })).toHaveAttribute('aria-checked', 'false');
+
+  await page.getByRole('button', { name: 'Ringkasan' }).click();
+  await expect(page.getByRole('heading', { name: 'Direktori Nomor Unit' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /BR-0001/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Bulan', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('Aktivitas Terbaru')).toHaveCount(0);
+
+  await page.reload();
+  const savedSettings = await page.evaluate(() => JSON.parse(window.localStorage.getItem('bike-rent-pro:system-settings')));
+  expect(savedSettings.businessName).toBe('Rental Pantai Bali');
+  expect(savedSettings.rentalCodePrefix).toBe('RNT');
+  await expect(page.getByRole('button', { name: /BR-0001/ })).toBeVisible();
+});
+
 test('metadata dan layout mobile siap dipublikasikan', async ({ page }, testInfo) => {
   await expect(page.locator('html')).toHaveAttribute('lang', 'id');
   await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /armada/i);

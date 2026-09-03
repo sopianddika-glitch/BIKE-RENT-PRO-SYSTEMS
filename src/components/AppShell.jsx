@@ -16,7 +16,7 @@ const navigationItems = [
   { id: 'settings', label: 'Pengaturan', icon: Settings },
 ];
 
-export default function AppShell({ activePage, onNavigate, pageTitle, pageSubtitle, notice, children }) {
+export default function AppShell({ activePage, onNavigate, pageTitle, pageSubtitle, notice, systemSettings, children }) {
   const today = new Intl.DateTimeFormat('id-ID', {
     weekday: 'long',
     day: '2-digit',
@@ -67,9 +67,9 @@ export default function AppShell({ activePage, onNavigate, pageTitle, pageSubtit
           <div className="flex h-11 w-11 items-center justify-center rounded-md bg-slate-950 text-white shadow-lg shadow-slate-950/15">
             <Bike size={23} />
           </div>
-          <div>
-            <p className="text-sm font-black leading-none text-slate-950">BIKE RENT</p>
-            <p className="mt-1 text-[10px] font-black uppercase tracking-[0.16em] text-cyan-700">Pro Operations</p>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-black leading-none text-slate-950">{systemSettings.businessName || 'Bike Rent Pro'}</p>
+            <p className="mt-1 truncate text-[10px] font-black uppercase tracking-[0.16em] text-cyan-700">{systemSettings.businessLocation || 'Pro Operations'}</p>
           </div>
         </div>
 
@@ -84,8 +84,8 @@ export default function AppShell({ activePage, onNavigate, pageTitle, pageSubtit
               <UserRound size={18} />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-xs font-black text-slate-900">Admin Utama</p>
-              <p className="mt-0.5 text-[10px] font-bold text-emerald-700">Operasional aktif</p>
+              <p className="truncate text-xs font-black text-slate-900">{systemSettings.adminName || 'Admin Utama'}</p>
+              <p className="mt-0.5 truncate text-[10px] font-bold text-emerald-700">{systemSettings.businessContact || 'Operasional aktif'}</p>
             </div>
           </div>
         </div>
@@ -98,9 +98,9 @@ export default function AppShell({ activePage, onNavigate, pageTitle, pageSubtit
               <div className="flex h-9 w-9 items-center justify-center rounded-md bg-slate-950 text-white">
                 <Bike size={20} />
               </div>
-              <div>
-                <p className="text-xs font-black leading-none">BIKE RENT</p>
-                <p className="mt-1 text-[9px] font-black uppercase tracking-[0.14em] text-cyan-700">Pro Operations</p>
+              <div className="min-w-0">
+                <p className="max-w-48 truncate text-xs font-black leading-none">{systemSettings.businessName || 'Bike Rent Pro'}</p>
+                <p className="mt-1 max-w-48 truncate text-[9px] font-black uppercase tracking-[0.14em] text-cyan-700">{systemSettings.businessLocation || 'Pro Operations'}</p>
               </div>
             </div>
             <div className="flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500">

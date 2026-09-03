@@ -1,9 +1,13 @@
+import { useMemo, useState } from 'react';
 import {
   ArrowRight,
   Bike,
+  Boxes,
   CircleDollarSign,
   Clock3,
+  Gauge,
   RefreshCw,
+  Search,
   ShieldAlert,
   TrendingDown,
   TrendingUp,
@@ -45,15 +49,27 @@ function Metric({ icon: Icon, label, value, meta, tone }) {
   );
 }
 
-export default function DashboardPage({ stats, dateFilter, recentTransactions, activeRentals, onNavigate, onStartRental, onReturnBike }) {
-  const totalBikes = stats.tersedia.length + stats.disewa.length + stats.bengkel.length + stats.hilang.length;
+export default function DashboardPage({ stats, fleetOverview, systemSettings, dateFilter, recentTransactions, activeRentals, onNavigate, onStartRental, onReturnBike }) {
+  const [stockSearch, setStockSearch] = useState('');
+  const totalBikes = fleetOverview.total;
+  const stockWarning = stats.tersedia.length <= systemSettings.lowAvailabilityThreshold;
+  const visibleStock = useMemo(() => {
+    const query = stockSearch.trim().toLowerCase();
+    return statusRows.map((status) => ({
+      ...status,
+      bikes: fleetOverview.byStatus[status.key].filter((bike) => !query || [bike.number, bike.type, bike.note].some((value) => String(value || '').toLowerCase().includes(query))),
+    }));
+  }, [fleetOverview, stockSearch]);
 
   return (
     <div className="space-y-5">
       <section className="overflow-hidden rounded-lg border border-slate-800 bg-slate-950 text-white shadow-xl shadow-slate-950/10">
         <div className="grid lg:grid-cols-[1fr_auto]">
           <div className="p-5 sm:p-6">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">Operasi Hari Ini</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">Operasi Hari Ini</p>
+              {stockWarning ? <span className="rounded bg-amber-400/15 px-2 py-1 text-[9px] font-black uppercase tracking-wide text-amber-200">Stok siap sewa menipis</span> : <span className="rounded bg-emerald-400/15 px-2 py-1 text-[9px] font-black uppercase tracking-wide text-emerald-200">Ketersediaan aman</span>}
+            </div>
             <div className="mt-3 flex flex-wrap items-end gap-x-7 gap-y-3">
               <div>
                 <p className="text-4xl font-black">{stats.tersedia.length}</p>
@@ -97,21 +113,21 @@ export default function DashboardPage({ stats, dateFilter, recentTransactions, a
 
       {dateFilter}
 
-      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      {systemSettings.dashboardShowFinance ? <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="grid sm:grid-cols-2 xl:grid-cols-4">
           <Metric icon={TrendingUp} label="Pendapatan Tamu" value={formatCurrency(stats.pendapatan)} meta={`${stats.totalTransactions} transaksi`} tone="emerald" />
           <Metric icon={WalletCards} label="Setoran Rental" value={formatCurrency(stats.setoranBelumDisetor)} meta={`${stats.transaksiBelumDisetor} belum disetor`} tone="cyan" />
           <Metric icon={TrendingDown} label="Biaya Operasional" value={formatCurrency(stats.pengeluaranOperasional)} meta="di luar modal rental" tone="rose" />
           <Metric icon={CircleDollarSign} label="Laba Bersih" value={formatCurrency(stats.laba)} meta="setelah seluruh biaya" tone="slate" />
         </div>
-      </section>
+      </section> : null}
 
-      <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
-        <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+      {systemSettings.dashboardShowFleet || systemSettings.dashboardShowActiveRentals ? <div className={`grid gap-5 ${systemSettings.dashboardShowFleet && systemSettings.dashboardShowActiveRentals ? 'xl:grid-cols-[0.9fr_1.1fr]' : ''}`}>
+        {systemSettings.dashboardShowFleet ? <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
             <div>
               <h2 className="text-sm font-black text-slate-950">Status Armada</h2>
-              <p className="mt-1 text-xs font-semibold text-slate-500">{totalBikes} unit terdaftar</p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">{totalBikes} unit / {fleetOverview.availabilityRate}% siap / {fleetOverview.utilizationRate}% disewa</p>
             </div>
             <button type="button" onClick={() => onNavigate('fleet')} className="inline-flex items-center gap-1.5 text-xs font-black text-cyan-700 hover:text-cyan-900">
               Buka Armada <ArrowRight size={14} />
@@ -139,9 +155,9 @@ export default function DashboardPage({ stats, dateFilter, recentTransactions, a
               );
             })}
           </div>
-        </section>
+        </section> : null}
 
-        <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+        {systemSettings.dashboardShowActiveRentals ? <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
             <div>
               <h2 className="text-sm font-black text-slate-950">Penyewaan Aktif</h2>
@@ -169,10 +185,42 @@ export default function DashboardPage({ stats, dateFilter, recentTransactions, a
           ) : (
             <div className="p-5"><EmptyState icon={Bike} title="Tidak ada penyewaan aktif" /></div>
           )}
-        </section>
-      </div>
+        </section> : null}
+      </div> : null}
 
-      <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+      {systemSettings.dashboardShowStock ? <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-black text-slate-950"><Boxes size={17} className="text-cyan-700" /> Direktori Nomor Unit</h2>
+            <p className="mt-1 text-xs font-semibold text-slate-500">Semua nomor sepeda di stok, dikelompokkan menurut status real-time</p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <span className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-slate-700"><Gauge size={14} /> Utilisasi {fleetOverview.utilizationRate}%</span>
+            <div className="relative">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input type="search" value={stockSearch} onChange={(event) => setStockSearch(event.target.value)} aria-label="Cari nomor unit di dashboard" placeholder="Cari nomor atau tipe" className="w-full rounded-md border border-slate-200 py-2.5 pl-9 pr-3 text-xs font-bold outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100 sm:w-56" />
+            </div>
+          </div>
+        </div>
+        <div className="grid gap-px bg-slate-200 sm:grid-cols-2 xl:grid-cols-4">
+          {visibleStock.map(({ key, label, icon: Icon, text, bikes }) => (
+            <div key={key} className="min-w-0 bg-white p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className={`flex items-center gap-2 text-xs font-black ${text}`}><Icon size={15} /> {label}</div>
+                <span className="rounded bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">{bikes.length}</span>
+              </div>
+              {bikes.length ? <div className="mt-3 flex flex-wrap gap-2">
+                {bikes.map((bike) => <button key={bike.id} type="button" onClick={() => onNavigate('fleet')} title={`${bike.number} / ${bike.type}${bike.note ? ` / ${bike.note}` : ''}`} className="min-w-0 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-left transition hover:border-cyan-300 hover:bg-cyan-50"><span className="block text-xs font-black text-slate-900">{bike.number}</span><span className="mt-0.5 block max-w-28 truncate text-[9px] font-bold text-slate-500">{bike.type}</span></button>)}
+              </div> : <p className="mt-3 text-xs font-semibold text-slate-400">Tidak ada unit</p>}
+            </div>
+          ))}
+        </div>
+        {fleetOverview.byType.length ? <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-100 bg-slate-50 px-5 py-3">
+          {fleetOverview.byType.map((type) => <span key={type.type} className="text-[10px] font-bold text-slate-600"><strong className="text-slate-900">{type.type}</strong> {type.total} unit / {type.tersedia} siap</span>)}
+        </div> : null}
+      </section> : null}
+
+      {systemSettings.dashboardShowActivity ? <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <h2 className="text-sm font-black text-slate-950">Aktivitas Terbaru</h2>
           <button type="button" onClick={() => onNavigate('finance')} className="text-xs font-black text-cyan-700">Lihat Audit</button>
@@ -188,7 +236,7 @@ export default function DashboardPage({ stats, dateFilter, recentTransactions, a
             ))}
           </div>
         ) : <div className="p-5"><EmptyState icon={CircleDollarSign} title="Belum ada aktivitas pada periode ini" /></div>}
-      </section>
+      </section> : null}
     </div>
   );
 }

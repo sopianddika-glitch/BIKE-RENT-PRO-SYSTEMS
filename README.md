@@ -17,12 +17,17 @@ Data aplikasi disimpan otomatis di `localStorage` browser.
 
 - Filter harian sebagai default, filter cepat minggu/bulan/tahun, dan satu kalender rentang dinamis.
 - Pusat Operasi real-time dengan pintasan sewa, pengembalian, dan setoran.
+- Direktori stok real-time yang menampilkan seluruh nomor unit berdasarkan status, dilengkapi pencarian dan ringkasan per tipe.
+- Dashboard modular: periode bawaan, ambang peringatan stok, dan visibilitas setiap widget dapat diatur.
 - Popup penyewaan multi-unit dengan pencarian, pilih semua, satu data tamu, serta harga per unit.
 - Pesanan berkelompok dengan kode transaksi dan pengembalian seluruh unit dalam satu klik.
-- Katalog Armada dengan pencarian, filter status, pengeditan, serta kontrol kondisi langsung.
+- Katalog Armada dengan pencarian, filter status, penomoran otomatis, pengeditan, serta kontrol kondisi langsung.
 - Riwayat transaksi berkelompok per tanggal dengan ringkasan masuk, keluar, dan laba.
-- Harga modal dan harga tamu dinamis per tipe sepeda.
-- Backup JSON, impor data, dan pemulihan data demo dari Pengaturan Sistem.
+- Harga modal dan harga tamu dinamis per tipe sepeda, termasuk tambah/hapus tipe yang aman.
+- Pengaturan identitas bisnis, lokasi etalase, penanggung jawab, awalan nomor unit, dan kode transaksi sewa.
+- Pemeriksaan kesehatan data untuk nomor duplikat, transaksi yatim, dan tarif bermargin negatif.
+- Backup JSON versi 4, impor data, dan pemulihan data demo lengkap dengan konfigurasi sistem.
+- Pemisahan workflow: status sewa hanya diaktifkan melalui Penyewaan agar unit dan transaksi selalu sinkron.
 - Sidebar desktop, navigasi bawah mobile, akses keyboard, notifikasi tindakan, dan dukungan reduced-motion.
 - Metadata SEO, Open Graph, JSON-LD, sitemap, robots, manifest, dan social preview.
 
@@ -48,6 +53,7 @@ Data aplikasi disimpan otomatis di `localStorage` browser.
 |   |-- data/seed.js
 |   |-- lib/
 |   |   |-- dateFilters.js
+|   |   |-- domain.js
 |   |   |-- formatters.js
 |   |   `-- storage.js
 |   |-- pages/

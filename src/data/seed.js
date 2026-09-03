@@ -61,6 +61,23 @@ export const initialRentalRates = {
   'Folding Bike': { cost: 30000, price: 50000 },
 };
 
+export const initialSystemSettings = {
+  businessName: 'Bike Rent Pro',
+  adminName: 'Admin Utama',
+  businessLocation: 'Pusat Rental',
+  businessContact: '',
+  unitPrefix: 'S',
+  unitDigits: 3,
+  rentalCodePrefix: 'SW',
+  lowAvailabilityThreshold: 2,
+  defaultDashboardRange: 'hari',
+  dashboardShowFinance: true,
+  dashboardShowFleet: true,
+  dashboardShowActiveRentals: true,
+  dashboardShowStock: true,
+  dashboardShowActivity: true,
+};
+
 export const quickFilters = [
   { id: 'hari', label: 'Hari' },
   { id: 'minggu', label: 'Minggu' },
