@@ -1,11 +1,13 @@
 import { useMemo, useRef, useState } from 'react';
 import { Bike, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import EmptyState from '../components/EmptyState.jsx';
+import { getUnitRateSnapshot, UNIT_RATE_FIELDS } from '../lib/rentalPricing.js';
+import { formatRentalDateTime } from '../lib/rentalDuration.js';
 import RentalTimingInfo from '../components/RentalTimingInfo.jsx';
 import { BIKE_STATUSES, STATUS_META } from '../data/seed.js';
 import { formatCurrency, normalizeText } from '../lib/formatters.js';
 
-const emptyForm = { number: '', type: '', status: 'tersedia', note: '' };
+const emptyForm = { number: '', type: '', status: 'tersedia', note: '', dailyRate: '', halfDayRate: '', dailyCost: '0', halfDayCost: '0' };
 const filters = [
   { id: 'semua', label: 'Semua' },
   { id: 'tersedia', label: 'Tersedia' },
@@ -14,7 +16,7 @@ const filters = [
   { id: 'hilang', label: 'Hilang' },
 ];
 
-export default function FleetPage({ activeRentals, now, dueSoonHours, bikes, bikeTypes, suggestedUnitNumber, getRate, onSaveBike, onDeleteBike, onStatusChange }) {
+export default function FleetPage({ activeRentals, now, dueSoonHours, bikes, bikeTypes, suggestedUnitNumber, onSaveBike, onDeleteBike, onStatusChange }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('semua');
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -44,7 +46,7 @@ export default function FleetPage({ activeRentals, now, dueSoonHours, bikes, bik
   const openEdit = (bike) => {
     setIsEditorOpen(true);
     setEditingBike(bike);
-    setForm({ number: bike.number, type: bike.type, status: bike.status, note: bike.note || '' });
+    setForm({ number: bike.number, type: bike.type, status: bike.status, note: bike.note || '', ...Object.fromEntries(UNIT_RATE_FIELDS.map((field) => [field, bike[field] ?? ''])) });
     setError('');
   };
 
@@ -61,7 +63,7 @@ export default function FleetPage({ activeRentals, now, dueSoonHours, bikes, bik
     submittingRef.current = true;
     setSubmitting(true);
     try {
-      const result = await onSaveBike(form, editingBike?.id, editingBike?.status);
+      const result = await onSaveBike(form, editingBike?.id, editingBike?.status, editingBike ? getUnitRateSnapshot(editingBike) : null);
       if (result?.error) { setError(result.error); return; }
       closeEditor();
     } finally {
@@ -95,13 +97,13 @@ export default function FleetPage({ activeRentals, now, dueSoonHours, bikes, bik
         {filteredBikes.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[880px] border-collapse text-left">
-              <thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-5 py-3 text-[10px] font-black uppercase tracking-wide text-slate-500">Unit</th><th className="px-5 py-3 text-[10px] font-black uppercase tracking-wide text-slate-500">Tipe & Catatan</th><th className="px-5 py-3 text-[10px] font-black uppercase tracking-wide text-slate-500">Harga Tamu</th><th className="px-5 py-3 text-[10px] font-black uppercase tracking-wide text-slate-500">Status</th><th className="px-5 py-3 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">Aksi</th></tr></thead>
+              <thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-5 py-3 text-[10px] font-black uppercase tracking-wide text-slate-500">Unit</th><th className="px-5 py-3 text-[10px] font-black uppercase tracking-wide text-slate-500">Tipe & Catatan</th><th className="px-5 py-3 text-[10px] font-black uppercase tracking-wide text-slate-500">Rate Harian</th><th className="px-5 py-3 text-[10px] font-black uppercase tracking-wide text-slate-500">Status</th><th className="px-5 py-3 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">Aksi</th></tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredBikes.map((bike) => (
                   <tr key={bike.id} className="transition hover:bg-slate-50">
                     <td className="px-5 py-4"><div className="flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-md bg-slate-100 text-slate-700"><Bike size={17} /></div><div><span className="font-black text-slate-950">{bike.number}</span><RentalTimingInfo transaction={activeRentals.find((rental) => rental.bike.id === bike.id)?.transaction} now={now} dueSoonHours={dueSoonHours} compact /></div></div></td>
                     <td className="px-5 py-4"><p className="text-sm font-black text-slate-800">{bike.type}</p><p className="mt-1 max-w-[360px] truncate text-xs font-semibold text-slate-500">{bike.note || 'Tanpa catatan'}</p></td>
-                    <td className="px-5 py-4"><p className="text-sm font-black text-emerald-700">{formatCurrency(getRate(bike.type).price)}</p><p className="mt-1 text-[10px] font-bold text-slate-600">Modal {formatCurrency(getRate(bike.type).cost)}</p></td>
+                    <td className="px-5 py-4"><p className="text-sm font-black text-emerald-700">{bike.dailyRate == null ? 'Belum diatur' : `${formatCurrency(bike.dailyRate)} / hari`}</p><p className="mt-1 text-[10px] font-bold text-slate-600">½ hari: {bike.halfDayRate == null ? 'Belum diatur' : formatCurrency(bike.halfDayRate)}</p><p className="mt-1 text-[10px] font-bold text-slate-600">Modal / hari: {bike.dailyCost == null ? 'Belum diatur' : formatCurrency(bike.dailyCost)}</p>{bike.rateHistory?.length ? <details className="mt-2 text-xs"><summary className="cursor-pointer font-bold text-cyan-800">Riwayat Rate</summary>{bike.rateHistory.map((event, index) => <p key={index} className="mt-2">{formatRentalDateTime(event.changedAt)} · Harian {event.previous?.dailyRate == null ? 'Belum diatur' : formatCurrency(event.previous.dailyRate)} → {event.next.dailyRate == null ? 'Belum diatur' : formatCurrency(event.next.dailyRate)} · ½ hari {event.previous?.halfDayRate == null ? 'Belum diatur' : formatCurrency(event.previous.halfDayRate)} → {event.next.halfDayRate == null ? 'Belum diatur' : formatCurrency(event.next.halfDayRate)}</p>)}</details> : null}</td>
                     <td className="px-5 py-4"><select value={bike.status} onChange={(event) => onStatusChange(bike.id, event.target.value)} aria-label={`Status ${bike.number}`} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100">{BIKE_STATUSES.map((status) => <option key={status} value={status} disabled={status === 'disewa' && bike.status !== 'disewa'}>{status === 'disewa' && bike.status !== 'disewa' ? 'Disewa (via Rental)' : STATUS_META[status].selectLabel}</option>)}</select></td>
                     <td className="px-5 py-4"><div className="flex justify-end gap-2"><button type="button" onClick={() => openEdit(bike)} className="inline-flex items-center gap-1.5 rounded-md bg-cyan-50 px-3 py-2 text-xs font-black text-cyan-700 hover:bg-cyan-100"><Pencil size={14} /> Edit</button><button type="button" onClick={() => setDeleteBike(bike)} className="inline-flex items-center gap-1.5 rounded-md bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 hover:bg-rose-100"><Trash2 size={14} /> Hapus</button></div></td>
                   </tr>
@@ -114,12 +116,14 @@ export default function FleetPage({ activeRentals, now, dueSoonHours, bikes, bik
 
       {isEditorOpen ? (
         <div className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/45 p-0 backdrop-blur-sm sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="fleet-editor-title">
-          <form onSubmit={submit} className="w-full max-w-lg rounded-t-lg bg-white shadow-2xl sm:rounded-lg">
+          <form onSubmit={submit} className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-t-lg bg-white shadow-2xl sm:rounded-lg">
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><div><h2 id="fleet-editor-title" className="text-base font-black text-slate-950">{editingBike ? 'Edit Unit' : 'Tambah Unit'}</h2><p className="mt-1 text-xs font-semibold text-slate-500">Data armada dan status operasional</p></div><button type="button" onClick={closeEditor} className="rounded-md p-2 text-slate-500 hover:bg-slate-100" aria-label="Tutup"><X size={18} /></button></div>
             <div className="grid gap-4 p-5 sm:grid-cols-2">
               <div><label htmlFor="fleet-number" className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-slate-500">Nomor Unit</label><input id="fleet-number" type="text" value={form.number} onChange={(event) => setForm({ ...form, number: event.target.value })} placeholder={suggestedUnitNumber} className="w-full rounded-md border border-slate-200 px-3 py-3 text-sm font-bold uppercase outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" /><p className="mt-1.5 text-[10px] font-semibold text-slate-500">Saran berikutnya: {suggestedUnitNumber}</p></div>
               <div><label htmlFor="fleet-type" className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-slate-500">Tipe Sepeda</label><input id="fleet-type" type="text" list="fleet-types" value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })} placeholder="Mountain Bike" className="w-full rounded-md border border-slate-200 px-3 py-3 text-sm font-bold outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" /><datalist id="fleet-types">{bikeTypes.map((type) => <option key={type} value={type} />)}</datalist></div>
               <div><label htmlFor="fleet-status" className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-slate-500">Status</label><select id="fleet-status" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })} className="w-full rounded-md border border-slate-200 px-3 py-3 text-sm font-bold outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100">{BIKE_STATUSES.map((status) => <option key={status} value={status} disabled={status === 'disewa' && editingBike?.status !== 'disewa'}>{status === 'disewa' && editingBike?.status !== 'disewa' ? 'Disewa (via Rental)' : STATUS_META[status].selectLabel}</option>)}</select></div>
+              <p className="text-xs font-semibold text-slate-500 sm:col-span-2">Rate per unit untuk rental baru. Kosong berarti belum diatur; modal 0 berarti tidak ada biaya. Perubahan tidak mengubah kontrak yang sudah dibuat.</p>
+              {[['dailyRate', 'Rate Harian'], ['halfDayRate', 'Rate ½ Hari'], ['dailyCost', 'Modal Harian'], ['halfDayCost', 'Modal ½ Hari']].map(([field, label]) => <div key={field}><label htmlFor={`fleet-${field}`} className="mb-1.5 block text-xs font-black text-slate-600">{label}</label><input id={`fleet-${field}`} type="number" min="0" step="1" value={form[field]} onChange={(event) => setForm({ ...form, [field]: event.target.value })} placeholder={field.includes('Cost') ? '0 jika tidak ada' : 'Belum diatur'} className="w-full rounded-md border border-slate-200 p-3 text-sm font-bold" /></div>)}
               <div className="sm:col-span-2"><label htmlFor="fleet-note" className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-slate-500">Catatan</label><textarea id="fleet-note" rows="3" value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="Kondisi, lokasi, atau informasi unit" className="w-full resize-none rounded-md border border-slate-200 px-3 py-3 text-sm font-semibold outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" /></div>
               {error ? <p className="rounded-md bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 sm:col-span-2" role="alert">{error}</p> : null}
             </div>

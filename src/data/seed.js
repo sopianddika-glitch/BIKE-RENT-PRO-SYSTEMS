@@ -36,13 +36,13 @@ export const STATUS_META = {
 };
 
 export const initialBikes = [
-  { id: 1, number: 'S-001', type: 'Mountain Bike', status: 'tersedia', note: 'Kondisi ban baru' },
-  { id: 2, number: 'S-002', type: 'Electric Scooter', status: 'disewa', note: 'Penyewa: Budi (0812...)' },
-  { id: 3, number: 'S-003', type: 'Road Bike', status: 'bengkel', note: 'Rantai putus' },
-  { id: 4, number: 'S-004', type: 'City Bike', status: 'tersedia', note: 'Parkir di blok A' },
-  { id: 5, number: 'S-005', type: 'Mountain Bike', status: 'disewa', note: 'Penyewa: Siti (0856...)' },
-  { id: 6, number: 'S-006', type: 'BMX', status: 'hilang', note: 'Terakhir terlihat di taman kota' },
-  { id: 7, number: 'S-007', type: 'Folding Bike', status: 'tersedia', note: 'Unit siap disewa' },
+  { id: 1, number: 'S-001', type: 'Mountain Bike', status: 'tersedia', dailyRate: 50000, halfDayRate: 30000, dailyCost: 30000, halfDayCost: 15000, note: 'Kondisi ban baru' },
+  { id: 2, number: 'S-002', type: 'Electric Scooter', status: 'disewa', dailyRate: 50000, halfDayRate: 30000, dailyCost: 30000, halfDayCost: 15000, note: 'Penyewa: Budi (0812...)' },
+  { id: 3, number: 'S-003', type: 'Road Bike', status: 'bengkel', dailyRate: 50000, halfDayRate: 30000, dailyCost: 30000, halfDayCost: 15000, note: 'Rantai putus' },
+  { id: 4, number: 'S-004', type: 'City Bike', status: 'tersedia', dailyRate: 50000, halfDayRate: 30000, dailyCost: 30000, halfDayCost: 15000, note: 'Parkir di blok A' },
+  { id: 5, number: 'S-005', type: 'Mountain Bike', status: 'disewa', dailyRate: 50000, halfDayRate: 30000, dailyCost: 30000, halfDayCost: 15000, note: 'Penyewa: Siti (0856...)' },
+  { id: 6, number: 'S-006', type: 'BMX', status: 'hilang', dailyRate: 50000, halfDayRate: 30000, dailyCost: 30000, halfDayCost: 15000, note: 'Terakhir terlihat di taman kota' },
+  { id: 7, number: 'S-007', type: 'Folding Bike', status: 'tersedia', dailyRate: 50000, halfDayRate: 30000, dailyCost: 30000, halfDayCost: 15000, note: 'Unit siap disewa' },
 ];
 
 export const initialTransactions = [

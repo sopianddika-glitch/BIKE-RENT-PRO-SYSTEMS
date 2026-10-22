@@ -17,7 +17,7 @@ const seedRental = async (page) => {
       { id: 6, number: 'F-006', type: 'City Bike', status: 'disewa', note: '' },
     ];
     const rental = { id: 101, date, startedAt: now.toISOString(), type: 'pendapatan', category: 'rental', amount: 60000, costAmount: 30000, grossProfit: 30000, settled: true, settledAt: now.toISOString(), returnedAt: null, returnDate: null, bikeId: 1, bikeNumber: 'A-001', customerName: 'Tamu Switch', customerContact: '08123', rentalNote: 'Catatan rental asli', note: 'Sewa A-001 / Tamu Switch', rentalCode: 'R-TEST', rentalGroupId: 'rental-test', rentalUnitCount: 1, deposit: 25000, duration: 8, source: 'counter' };
-    localStorage.setItem('bike-rent-pro:bikes', JSON.stringify(bikes));
+    localStorage.setItem('bike-rent-pro:bikes', JSON.stringify(bikes.map((bike) => ({ ...bike, dailyRate: 50000, halfDayRate: 30000, dailyCost: 30000, halfDayCost: 15000 }))));
     localStorage.setItem('bike-rent-pro:transactions', JSON.stringify([rental, { ...rental, id: 202, bikeId: 6, bikeNumber: 'F-006', customerName: 'Tamu Lain', note: 'Sewa F-006 / Tamu Lain', rentalCode: 'R-OTHER', rentalGroupId: 'rental-other' }]));
   });
   await page.goto('/#rental');
@@ -78,7 +78,7 @@ test('legacy rental supports A → B → C → return with intact finance, unit 
   await page.reload();
   const active = page.getByRole('article').filter({ hasText: 'Tamu Switch' });
   await expect(active.getByRole('button', { name: 'Ganti Unit C-003' })).toBeVisible();
-  await active.locator('summary').click();
+  await active.locator('summary').filter({ hasText: 'Riwayat Unit' }).click();
   await expect(active).toContainText('A-001 → B-002');
   await expect(active).toContainText('B-002 → C-003');
   await active.getByRole('button', { name: 'Kembalikan', exact: true }).click();
@@ -90,7 +90,7 @@ test('legacy rental supports A → B → C → return with intact finance, unit 
   expect(returned.bikes.slice(0, 3).map(({ status }) => status)).toEqual(['bengkel', 'tersedia', 'tersedia']);
   expect(returned.bikes.filter(({ status }) => status === 'disewa')).toHaveLength(1);
   await page.getByRole('button', { name: 'Keuangan', exact: true }).click();
-  await page.locator('summary').click();
+  await page.locator('summary').filter({ hasText: 'Riwayat Unit' }).click();
   await expect(page.getByText('Rental selesai · C-003', { exact: true })).toBeVisible();
   await expect(page.getByText('A-001 → B-002', { exact: true })).toBeVisible();
   await expect(page.getByText('B-002 → C-003', { exact: true })).toBeVisible();
@@ -217,7 +217,7 @@ test('A → B then grouped return returns B and siblings while A stays in repair
   expect(state.transactions[0].switchHistory).toHaveLength(1);
 });
 
-test('backup v6 round-trip preserves switches and imports legacy backups safely', async ({ page }) => {
+test('backup v7 round-trip preserves switches and imports legacy backups safely', async ({ page }) => {
   await seedRental(page);
   const dialog = await openReview(page);
   await dialog.getByRole('button', { name: 'Konfirmasi Ganti Unit' }).click();
@@ -228,7 +228,7 @@ test('backup v6 round-trip preserves switches and imports legacy backups safely'
   const downloadEvent = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Unduh Backup' }).click();
   const backup = JSON.parse(await readFile(await (await downloadEvent).path(), 'utf8'));
-  expect(backup.schemaVersion).toBe(6);
+  expect(backup.schemaVersion).toBe(7);
   expect(backup.transactions).toEqual(switched.transactions);
   await page.locator('input[type="file"]').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });
   await expect(page.getByText('Backup berhasil diimpor dan diterapkan.', { exact: true })).toBeVisible();

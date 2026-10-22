@@ -116,11 +116,13 @@ export default function DashboardPage({ now, dueSoonHours, stats, fleetOverview,
       {dateFilter}
 
       {systemSettings.dashboardShowFinance ? <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div className="grid sm:grid-cols-2 xl:grid-cols-4">
-          <Metric icon={TrendingUp} label="Pendapatan Tamu" value={formatCurrency(stats.pendapatan)} meta={`${stats.totalTransactions} transaksi`} tone="emerald" />
+        <div className="grid sm:grid-cols-2 xl:grid-cols-3">
+          <Metric icon={TrendingUp} label="Pendapatan / Charges" value={formatCurrency(stats.pendapatan)} meta={`${stats.totalTransactions} transaksi`} tone="emerald" />
+          <Metric icon={TrendingUp} label="Pembayaran Diterima" value={formatCurrency(stats.paymentsReceived)} meta="uang diterima pada periode" tone="emerald" />
+          <Metric icon={WalletCards} label="Piutang Tercatat" value={formatCurrency(stats.balanceDue)} meta={`saldo s.d. ${stats.balanceThrough}`} tone="cyan" />
           <Metric icon={WalletCards} label="Setoran Rental" value={formatCurrency(stats.setoranBelumDisetor)} meta={`${stats.transaksiBelumDisetor} belum disetor`} tone="cyan" />
           <Metric icon={TrendingDown} label="Biaya Operasional" value={formatCurrency(stats.pengeluaranOperasional)} meta="di luar modal rental" tone="rose" />
-          <Metric icon={CircleDollarSign} label="Laba Bersih" value={formatCurrency(stats.laba)} meta="setelah seluruh biaya" tone="slate" />
+          <Metric icon={CircleDollarSign} label="Laba Akrual" value={formatCurrency(stats.laba)} meta="tagihan dikurangi seluruh biaya" tone="slate" />
         </div>
       </section> : null}
 
@@ -232,7 +234,7 @@ export default function DashboardPage({ now, dueSoonHours, stats, fleetOverview,
             {recentTransactions.slice(0, 5).map((transaction) => (
               <div key={transaction.id} className="grid gap-2 px-5 py-4 sm:grid-cols-[1fr_auto_auto] sm:items-center">
                 <div className="min-w-0"><p className="truncate text-sm font-black text-slate-800">{transaction.note}</p><p className="mt-1 text-xs font-semibold text-slate-500">{formatDate(transaction.date)}</p></div>
-                {transaction.activityType === 'switch' ? <span className="text-xs font-black text-cyan-700">Ganti Unit</span> : <p className={`text-sm font-black ${transaction.type === 'pendapatan' ? 'text-emerald-700' : 'text-rose-700'}`}>{transaction.type === 'pendapatan' ? '+' : '-'} {formatCurrency(transaction.amount)}</p>}
+                {transaction.activityType === 'switch' ? <span className="text-xs font-black text-cyan-700">Ganti Unit</span> : <p className={`text-sm font-black ${transaction.type === 'pendapatan' || transaction.type === 'payment' ? 'text-emerald-700' : 'text-rose-700'}`}>{transaction.type === 'pendapatan' || transaction.type === 'payment' ? '+' : '-'} {formatCurrency(transaction.amount)}</p>}
                 <span className="text-[10px] font-black uppercase tracking-wide text-slate-600">{transaction.category === 'rental' ? transaction.rentalCode || 'Sewa' : 'Manual'}</span>
               </div>
             ))}

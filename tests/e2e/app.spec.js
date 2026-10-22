@@ -23,8 +23,9 @@ test('penyewaan multi-unit, setoran, dan pengembalian kelompok terhubung', async
   await page.getByLabel('Catatan').fill('Pengujian alur operasional');
   await page.getByRole('button', { name: 'Tinjau Transaksi' }).click();
   await expect(page.getByText('2 sepeda')).toBeVisible();
-  await expect(page.getByLabel('Harga S-001')).toHaveValue('50000');
-  await page.getByLabel('Harga S-004').fill('60000');
+  await expect(page.getByTestId('booking-price-1')).toContainText('Total Rental: Rp 50.000');
+  await page.getByLabel('Penyesuaian S-004', { exact: true }).fill('10000');
+  await page.getByLabel('Alasan penyesuaian S-004').fill('Tambahan layanan disepakati');
   await expect(page.getByText('Rp 110.000')).toBeVisible();
   await page.getByRole('button', { name: 'Aktifkan 2 Unit' }).click();
   await expect(page.getByText('2 unit untuk Tamu Pengujian berhasil diaktifkan.')).toBeVisible();
@@ -46,12 +47,14 @@ test('penyewaan multi-unit, setoran, dan pengembalian kelompok terhubung', async
   await expect(page.getByRole('article').filter({ hasText: 'Tamu Pengujian' })).toHaveCount(0);
 });
 
-test('armada baru dan harga dinamis terhubung ke penyewaan', async ({ page }) => {
+test('rate per unit terhubung ke rental dan terpisah dari referensi harga lama', async ({ page }) => {
   await page.getByRole('button', { name: 'Unit', exact: true }).click();
   await page.getByRole('button', { name: 'Tambah Unit' }).click();
   await page.getByLabel('Nomor Unit').fill('S-008');
   await page.getByLabel('Tipe Sepeda').fill('Hybrid Bike');
   await page.getByLabel('Catatan').fill('Unit pengujian integrasi');
+  await page.getByLabel('Rate Harian', { exact: true }).fill('50000');
+  await page.getByLabel('Modal Harian', { exact: true }).fill('32000');
   await page.getByRole('button', { name: 'Simpan Unit' }).click();
 
   const newBikeRow = page.getByRole('row').filter({ hasText: 'S-008' });
@@ -60,8 +63,8 @@ test('armada baru dan harga dinamis terhubung ke penyewaan', async ({ page }) =>
 
   await page.getByRole('button', { name: 'Pengaturan' }).click();
   await expect(page.getByRole('row').filter({ hasText: 'Hybrid Bike' })).toContainText('Rp 20.000');
-  await page.getByLabel('Modal Hybrid Bike').fill('32000');
-  await expect(page.getByRole('row').filter({ hasText: 'Hybrid Bike' })).toContainText('Rp 18.000');
+  await page.getByLabel('Modal Hybrid Bike').fill('10000');
+  await expect(page.getByRole('row').filter({ hasText: 'Hybrid Bike' })).toContainText('Rp 40.000');
 
   await page.getByRole('button', { name: 'Rental', exact: true }).click();
   await page.getByRole('button', { name: 'Buat Penyewaan' }).click();
@@ -69,8 +72,8 @@ test('armada baru dan harga dinamis terhubung ke penyewaan', async ({ page }) =>
   await page.getByRole('button', { name: 'Lanjut ke Pelanggan' }).click();
   await page.getByLabel('Nama Tamu').fill('Tamu Harga Dinamis');
   await page.getByRole('button', { name: 'Tinjau Transaksi' }).click();
-  await expect(page.getByLabel('Harga S-008')).toHaveValue('50000');
-  await expect(page.getByText('Rp 32.000', { exact: true })).toBeVisible();
+  await expect(page.getByText('Total Rental: Rp 50.000', { exact: true })).toBeVisible();
+  await expect(page.getByText('Modal periode: Rp 32.000', { exact: true })).toBeVisible();
   await expect(page.getByText('Rp 18.000', { exact: true })).toBeVisible();
 });
 

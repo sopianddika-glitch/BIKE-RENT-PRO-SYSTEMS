@@ -1,5 +1,6 @@
 import { BIKE_STATUSES, initialSystemSettings } from '../data/seed.js';
-import { EXTENSION_RATE_FIELDS, isRentalClosed } from './rentalDuration.js';
+import { isRentalClosed } from './rentalDuration.js';
+import { normalizeUnitRates, EXTENSION_RATE_FIELDS } from './rentalPricing.js';
 
 const dashboardRanges = ['hari', 'minggu', 'bulan', 'tahun'];
 
@@ -28,6 +29,7 @@ export const normalizeRentalRate = (rate = {}) => ({
 
 export const normalizeBike = (bike = {}) => ({
   ...bike,
+  ...normalizeUnitRates(bike),
   status: bike.status === 'baru' || !BIKE_STATUSES.includes(bike.status) ? 'tersedia' : bike.status,
 });
 
@@ -89,6 +91,7 @@ export const buildDashboardStats = (bikes, transactions) => {
   const incomeTransactions = transactions.filter((transaction) => transaction.type === 'pendapatan');
   const rentalTransactions = transactions.filter((transaction) => Number(transaction.costAmount || 0) > 0);
   const pendapatan = incomeTransactions.reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
+  const paymentsReceived = transactions.filter((transaction) => transaction.entryKind === 'payment' || (transaction.type === 'pendapatan' && transaction.category !== 'rental')).reduce((total, transaction) => total + Number(transaction.amount || 0), 0);
   const setoranRental = rentalTransactions.reduce((total, transaction) => total + Number(transaction.costAmount || 0), 0);
   const pendingSettlements = rentalTransactions.filter((transaction) => !transaction.settled);
   const setoranBelumDisetor = pendingSettlements.reduce((total, transaction) => total + Number(transaction.costAmount || 0), 0);
@@ -100,6 +103,7 @@ export const buildDashboardStats = (bikes, transactions) => {
   return {
     ...statusGroups,
     pendapatan,
+    paymentsReceived,
     setoranRental,
     setoranBelumDisetor,
     setoranSudahDisetor: setoranRental - setoranBelumDisetor,

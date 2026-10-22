@@ -7,6 +7,8 @@ import SwitchUnitDialog from '../components/SwitchUnitDialog.jsx';
 import UnitHistory from '../components/UnitHistory.jsx';
 import ExtendRentalDialog from '../components/ExtendRentalDialog.jsx';
 import ExtensionHistory from '../components/ExtensionHistory.jsx';
+import RentalPriceBreakdown from '../components/RentalPriceBreakdown.jsx';
+import { getRentalFinancials } from '../lib/rentalPricing.js';
 import RentalTimingInfo from '../components/RentalTimingInfo.jsx';
 import { formatCurrency, formatDate } from '../lib/formatters.js';
 
@@ -99,7 +101,7 @@ export default function RentalPage({
         {rentalGroups.length > 0 ? (
           <div className="grid gap-4 xl:grid-cols-2">
             {rentalGroups.map((group) => {
-              const total = group.items.reduce((sum, item) => sum + Number(item.transaction?.amount || 0), 0);
+              const total = group.items.reduce((sum, item) => sum + (item.transaction ? getRentalFinancials(item.transaction).totalCharge : 0), 0);
               const bikeIds = group.items.map((item) => item.bike.id);
               return (
                 <article key={group.id} className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -118,7 +120,7 @@ export default function RentalPage({
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex min-w-0 items-center gap-3">
                             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-cyan-50 text-cyan-700"><Bike size={19} /></div>
-                            <div className="min-w-0"><div className="flex items-center gap-2"><p className="font-black text-slate-950">{bike.number}</p><StatusBadge status="disewa" /></div><p className="mt-1 truncate text-xs font-semibold text-slate-600">{bike.type} / {formatCurrency(transaction?.amount || 0)}</p></div>
+                            <div className="min-w-0"><div className="flex items-center gap-2"><p className="font-black text-slate-950">{bike.number}</p><StatusBadge status="disewa" /></div><p className="mt-1 truncate text-xs font-semibold text-slate-600">{bike.type} / {formatCurrency(transaction ? getRentalFinancials(transaction).totalCharge : 0)}</p></div>
                           </div>
                           <div className="flex flex-wrap gap-2">
                             {transaction ? <button type="button" aria-label={`Perpanjang Rental ${bike.number}`} onClick={() => setExtendTarget({ bike, transaction })} className="inline-flex items-center justify-center gap-2 rounded-md bg-cyan-50 px-3 py-3 text-xs font-black text-cyan-800 hover:bg-cyan-100"><Clock3 size={14} /> Perpanjang Rental</button> : null}
@@ -127,6 +129,7 @@ export default function RentalPage({
                           </div>
                         </div>
                         <RentalTimingInfo transaction={transaction} now={now} dueSoonHours={settings.dueSoonHours} />
+                        <RentalPriceBreakdown transaction={transaction} />
                         <UnitHistory transaction={transaction} />
                         <ExtensionHistory transaction={transaction} />
                       </div>
@@ -153,7 +156,7 @@ export default function RentalPage({
 
       {extendTarget ? <ExtendRentalDialog target={extendTarget} settings={settings} getRate={getRate} now={now} onSubmit={onExtendRental} onClose={closeExtendDialog} /> : null}
       {switchTarget ? <SwitchUnitDialog target={switchTarget} bikes={bikes} transactions={transactions} onSubmit={onSwitchUnit} onClose={closeSwitchDialog} /> : null}
-      <RentalDialog maxRentalDays={settings.maxRentalDays} open={isDialogOpen} availableBikes={availableBikes} form={form} error={error} getRate={getRate} onChange={onChange} onSubmit={onSubmit} onClose={closeDialog} />
+      <RentalDialog onConfigureRates={() => { closeDialog(); onNavigate('fleet'); }} maxRentalDays={settings.maxRentalDays} open={isDialogOpen} availableBikes={availableBikes} form={form} error={error} onChange={onChange} onSubmit={onSubmit} onClose={closeDialog} />
     </div>
   );
 }

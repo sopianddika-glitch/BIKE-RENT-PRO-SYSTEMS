@@ -16,6 +16,8 @@ import {
 import { formatCurrency, formatDate } from '../lib/formatters.js';
 import DurationPicker from './DurationPicker.jsx';
 import { createRentalTiming, formatRentalDateTime } from '../lib/rentalDuration.js';
+import { getUnitRateSnapshot, previewRentalPricing } from '../lib/rentalPricing.js';
+import BookingUnitPricing from './BookingUnitPricing.jsx';
 
 const steps = [
   { id: 1, label: 'Pilih Unit' },
@@ -29,7 +31,7 @@ export default function RentalDialog({
   availableBikes,
   form,
   error,
-  getRate,
+  onConfigureRates,
   onChange,
   onSubmit,
   onClose,
@@ -51,15 +53,6 @@ export default function RentalDialog({
     if (!query) return availableBikes;
     return availableBikes.filter((bike) => [bike.number, bike.type, bike.note].some((value) => String(value || '').toLocaleLowerCase('id-ID').includes(query)));
   }, [availableBikes, search]);
-
-  const totals = useMemo(() => selectedBikes.reduce((summary, bike) => {
-    const rate = getRate(bike.type);
-    const price = Number(form.prices[bike.id] ?? rate.price) || 0;
-    summary.price += price;
-    summary.cost += Number(rate.cost || 0);
-    summary.profit += price - Number(rate.cost || 0);
-    return summary;
-  }, { price: 0, cost: 0, profit: 0 }), [form.prices, getRate, selectedBikes]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -106,6 +99,12 @@ export default function RentalDialog({
   let timingError = '';
   try { timing = createRentalTiming(form, maxRentalDays); }
   catch (cause) { timingError = cause.message; }
+  const pricing = selectedBikes.map((bike) => {
+    try { return { bike, quote: previewRentalPricing(form.rateSnapshots[bike.id] || getUnitRateSnapshot(bike), timing, form.pricingInputs[bike.id]?.adjustment ?? 0) }; }
+    catch (cause) { return { bike, error: timing ? cause.message : timingError }; }
+  });
+  const pricingError = pricing.find((item) => item.error)?.error;
+  const totals = pricing.reduce((sum, item) => ({ price: sum.price + (item.quote?.totalCharge || 0), cost: sum.cost + (item.quote?.costAmount || 0), profit: sum.profit + (item.quote ? item.quote.totalCharge - item.quote.costAmount : 0) }), { price: 0, cost: 0, profit: 0 });
 
   const toggleBike = (bikeId) => {
     const nextIds = selectedIds.has(bikeId)
@@ -135,6 +134,7 @@ export default function RentalDialog({
       return;
     }
     if (step === 2 && !timing) { setLocalError(timingError); return; }
+    if (step === 2 && pricingError) { setLocalError(pricingError); return; }
     setLocalError('');
     setStep((current) => Math.min(3, current + 1));
   };
@@ -198,14 +198,13 @@ export default function RentalDialog({
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {filteredBikes.map((bike) => {
                     const selected = selectedIds.has(bike.id);
-                    const rate = getRate(bike.type);
                     return (
                       <button key={bike.id} type="button" onClick={() => toggleBike(bike.id)} aria-pressed={selected} aria-label={`${selected ? 'Batalkan pilihan' : 'Pilih'} ${bike.number} / ${bike.type}`} className={`relative min-h-32 rounded-md border p-4 text-left transition ${selected ? 'border-cyan-500 bg-cyan-50 ring-2 ring-cyan-100' : 'border-slate-200 bg-white hover:border-cyan-300 hover:bg-slate-50'}`}>
                         <span className={`absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-md border ${selected ? 'border-cyan-700 bg-cyan-700 text-white' : 'border-slate-300 bg-white text-transparent'}`}><Check size={14} /></span>
                         <Bike size={19} className={selected ? 'text-cyan-700' : 'text-slate-500'} />
                         <p className="mt-3 font-black text-slate-950">{bike.number}</p>
                         <p className="mt-1 truncate text-xs font-semibold text-slate-600">{bike.type}</p>
-                        <p className="mt-3 text-sm font-black text-emerald-700">{formatCurrency(rate.price)}</p>
+                        <p className="mt-3 text-sm font-black text-emerald-700">{bike.dailyRate == null ? 'Rate rental unit belum diatur.' : `${formatCurrency(bike.dailyRate)} / hari`}</p>
                       </button>
                     );
                   })}
@@ -223,6 +222,7 @@ export default function RentalDialog({
               <div><label htmlFor="bulk-rental-date" className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-slate-600">Tanggal Sewa</label><div className="relative"><CalendarDays size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" /><input id="bulk-rental-date" type="date" value={form.date} onChange={(event) => onChange('date', event.target.value)} className="w-full rounded-md border border-slate-200 py-3 pl-10 pr-3 text-sm font-bold outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" /></div></div>
               <div><label htmlFor="rental-start-time" className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-slate-600">Jam Mulai</label><input id="rental-start-time" type="time" value={form.startTime} onChange={(event) => onChange('startTime', event.target.value)} className="w-full min-w-0 rounded-md border border-slate-200 p-3 text-sm font-bold" /></div>
               <DurationPicker id="rental-duration" label="Durasi Rental" value={form.durationDays} onChange={(value) => onChange('durationDays', value)} maxDays={maxRentalDays} />
+              <div className="space-y-3 sm:col-span-2">{pricing.map((item) => <BookingUnitPricing key={item.bike.id} {...item} />)}{pricingError ? <button type="button" onClick={onConfigureRates} className="rounded-md bg-amber-50 p-3 text-xs font-black text-amber-900">Atur Rate di Unit</button> : null}</div>
               <div className="space-y-1 rounded-md bg-cyan-50 p-3 text-xs font-bold text-cyan-900 sm:col-span-2"><p>Mulai: {formatRentalDateTime(timing?.startedAt)}</p><p>Selesai otomatis: {timing ? formatRentalDateTime(timing.dueAt) : timingError}</p></div>
               <div className="sm:col-span-2"><label htmlFor="bulk-rental-note" className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-slate-600">Catatan</label><div className="relative"><StickyNote size={17} className="absolute left-3 top-3 text-slate-500" /><textarea id="bulk-rental-note" rows="3" value={form.note} onChange={(event) => onChange('note', event.target.value)} placeholder="Jaminan, tujuan, atau kondisi khusus" className="w-full resize-none rounded-md border border-slate-200 py-3 pl-10 pr-3 text-sm font-semibold outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" /></div></div>
             </div>
@@ -236,21 +236,8 @@ export default function RentalDialog({
                 <div className="p-4"><p className="text-[9px] font-black uppercase tracking-wide text-slate-600">Tanggal</p><p className="mt-1 text-sm font-black text-slate-950">{formatDate(form.date)}</p></div>
               </div>
 
-              <div className="space-y-1 rounded-md bg-cyan-50 p-3 text-xs font-bold text-cyan-900"><p>Mulai: {formatRentalDateTime(timing?.startedAt)}</p><p>Selesai otomatis: {formatRentalDateTime(timing?.dueAt)}</p><p className="font-semibold">Harga awal mengikuti kesepakatan untuk durasi yang dipilih.</p></div>
-              <div className="overflow-hidden rounded-md border border-slate-200">
-                <div className="grid grid-cols-[1fr_132px] border-b border-slate-200 bg-slate-50 px-4 py-3 text-[9px] font-black uppercase tracking-wide text-slate-600"><span>Unit</span><span>Harga Tamu</span></div>
-                <div className="divide-y divide-slate-100">
-                  {selectedBikes.map((bike) => {
-                    const rate = getRate(bike.type);
-                    return (
-                      <div key={bike.id} className="grid grid-cols-[1fr_132px] items-center gap-3 px-4 py-3">
-                        <div className="min-w-0"><p className="font-black text-slate-950">{bike.number}</p><p className="mt-1 truncate text-xs font-semibold text-slate-600">{bike.type} / Modal {formatCurrency(rate.cost)}</p></div>
-                        <input type="number" min="1000" step="1000" value={form.prices[bike.id] ?? rate.price} onChange={(event) => onChange('price', { bikeId: bike.id, amount: event.target.value })} aria-label={`Harga ${bike.number}`} className="w-full rounded-md border border-slate-200 px-3 py-2.5 text-right text-sm font-black outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <div className="space-y-1 rounded-md bg-cyan-50 p-3 text-xs font-bold text-cyan-900"><p>Mulai: {formatRentalDateTime(timing?.startedAt)}</p><p>Selesai otomatis: {formatRentalDateTime(timing?.dueAt)}</p><p className="font-semibold">Charge dihitung dari snapshot rate × durasi. Pembayaran dicatat terpisah.</p></div>
+              {pricing.map((item) => <BookingUnitPricing key={item.bike.id} {...item} editable input={form.pricingInputs[item.bike.id]} onChange={(field, value) => onChange('unitPricing', { bikeId: item.bike.id, field, value })} />)}
 
               <div className="grid overflow-hidden rounded-md bg-slate-950 text-white sm:grid-cols-3">
                 <div className="border-b border-white/10 p-4 sm:border-b-0 sm:border-r"><p className="text-[9px] font-black uppercase tracking-wide text-cyan-300">Total Tamu</p><p className="mt-1 text-xl font-black">{formatCurrency(totals.price)}</p></div>

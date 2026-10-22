@@ -1,5 +1,6 @@
+import { extendRental, getExtensionQuote, getFinancialEntries } from '../../src/lib/rentalPricing.js';
 import { expect, test } from '@playwright/test';
-import { addRentalDuration, createRentalTiming, extendRental, fromDateTimeInput, getExtensionQuote, getFinancialEntries, getRentalTimeStatus, getReturnTiming, isValidTimestamp, validateRentalLimit } from '../../src/lib/rentalDuration.js';
+import { addRentalDuration, createRentalTiming, fromDateTimeInput, getRentalTimeStatus, getReturnTiming, isValidTimestamp, validateRentalLimit } from '../../src/lib/rentalDuration.js';
 import { buildDashboardStats, getActiveRentals, normalizeTransaction } from '../../src/lib/domain.js';
 import { switchRentalUnit } from '../../src/lib/unitSwitch.js';
 

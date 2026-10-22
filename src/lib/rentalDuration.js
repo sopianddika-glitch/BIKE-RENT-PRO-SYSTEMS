@@ -1,5 +1,4 @@
 export const HOUR_MS = 60 * 60 * 1000;
-export const EXTENSION_RATE_FIELDS = ['extensionHalfDayPrice', 'extensionHalfDayCost', 'extensionDayPrice', 'extensionDayCost'];
 
 export const isValidTimestamp = (value) => {
   if (typeof value !== 'string') return false;
@@ -47,6 +46,15 @@ export const addRentalDuration = (timestamp, value, timeZone = localTimeZone()) 
   return instantFromWallClock(wall.getTime(), timeZone);
 };
 
+// Count rental periods, not touched calendar dates. Reject irregular intervals instead of rounding money.
+export const getBillableDuration = (startedAt, dueAt, timeZone = localTimeZone()) => {
+  if (!isValidTimestamp(startedAt) || !isValidTimestamp(dueAt) || Date.parse(dueAt) <= Date.parse(startedAt)) throw new Error('Waktu rental tidak valid.');
+  if (Date.parse(dueAt) - Date.parse(startedAt) === 12 * HOUR_MS) return 0.5;
+  const days = (wallClock(dueAt, timeZone) - wallClock(startedAt, timeZone)) / (24 * HOUR_MS);
+  if (!Number.isSafeInteger(days) || days <= 0 || Date.parse(addRentalDuration(startedAt, days, timeZone)) !== Date.parse(dueAt)) throw new Error('Durasi tidak sesuai periode rate rental.');
+  return days;
+};
+
 export const toDateTimeInput = (timestamp, timeZone = localTimeZone()) => isValidTimestamp(timestamp)
   ? new Date(wallClock(timestamp, timeZone)).toISOString().slice(0, 16) : '';
 
@@ -89,80 +97,4 @@ export const getRentalTimeStatus = (transaction, now, dueSoonHours) => {
 export const getReturnTiming = (transaction, returnedAt) => ({
   dueAtOnReturn: isValidTimestamp(transaction.dueAt) ? transaction.dueAt : null,
   overdueMillisecondsOnReturn: isValidTimestamp(transaction.dueAt) ? Math.max(0, Date.parse(returnedAt) - Date.parse(transaction.dueAt)) : null,
-});
-
-export const getExtensionQuote = (rate, value) => {
-  let days;
-  try { days = durationDays(value); } catch { return null; }
-  const price = days === 0.5 ? rate.extensionHalfDayPrice : rate.extensionDayPrice;
-  const cost = days === 0.5 ? rate.extensionHalfDayCost : rate.extensionDayCost;
-  if (price === null || price === undefined || cost === null || cost === undefined) return null;
-  const multiplier = days === 0.5 ? 1 : days;
-  return { charge: Number(price) * multiplier, costAmount: Number(cost) * multiplier };
-};
-
-export const extendRental = (state, request, settings, extendedAt = new Date().toISOString()) => {
-  const transaction = state.transactions.find((item) => item.id === Number(request.rentalId));
-  if (!transaction || transaction.category !== 'rental') throw new Error('Rental tidak ditemukan.');
-  if (isRentalClosed(transaction)) throw new Error('Rental sudah selesai atau dibatalkan.');
-  const bike = state.bikes.find((item) => item.id === Number(transaction.bikeId));
-  if (!bike || bike.status !== 'disewa') throw new Error('Rental tidak lagi memiliki unit aktif.');
-  const history = transaction.extensionHistory || [];
-  if ((transaction.dueAt || null) !== request.expectedDueAt || history.length !== request.expectedExtensionCount || bike.id !== request.currentBikeId) {
-    throw new Error('Rental sudah berubah. Tutup dialog dan tinjau kembali perpanjangan.');
-  }
-  if ((transaction.startedAt && !isValidTimestamp(transaction.startedAt)) || (transaction.dueAt && !isValidTimestamp(transaction.dueAt)) || !isValidTimestamp(extendedAt)) throw new Error('Timestamp rental tidak valid. Periksa data rental.');
-  const timeZone = transaction.rentalTimeZone || localTimeZone();
-  const startedAt = transaction.startedAt || request.legacyStartedAt;
-  const previousDueAt = transaction.dueAt || request.legacyDueAt;
-  const addedDays = durationDays(request.additionalDays);
-  const dueAt = addRentalDuration(previousDueAt, addedDays, timeZone);
-  validateRentalLimit(startedAt, previousDueAt, settings.maxRentalDays, timeZone);
-  validateRentalLimit(startedAt, dueAt, settings.maxRentalDays, timeZone);
-  for (const field of ['charge', 'costAmount']) {
-    if (request[field] === '' || request[field] === null || request[field] === undefined || !Number.isSafeInteger(Number(request[field])) || Number(request[field]) < 0) throw new Error('Harga tambahan dan modal wajib diisi dengan nominal rupiah yang valid.');
-  }
-  if (typeof request.note !== 'string' || request.note.length > 1000) throw new Error('Catatan perpanjangan tidak valid.');
-  const event = {
-    id: `${transaction.id}-${history.length + 1}-${extendedAt}`,
-    rentalId: transaction.id, extendedAt, previousDueAt, additionalDays: addedDays, dueAt,
-    date: toDateTimeInput(extendedAt, timeZone).slice(0, 10),
-    charge: Number(request.charge), costAmount: Number(request.costAmount), note: request.note.trim(),
-    settled: Number(request.costAmount) > 0 ? false : null, settledAt: null,
-    wasOverdue: Date.parse(extendedAt) > Date.parse(previousDueAt),
-    overdueMilliseconds: Math.max(0, Date.parse(extendedAt) - Date.parse(previousDueAt)),
-    legacyTimingProvided: !transaction.dueAt || !transaction.startedAt,
-    pricingType: bike.type,
-  };
-  const originalAmount = transaction.originalAmount ?? transaction.amount;
-  const originalCostAmount = transaction.originalCostAmount ?? transaction.costAmount ?? 0;
-  const nextHistory = [...history, event];
-  const amount = Number(originalAmount) + nextHistory.reduce((sum, item) => sum + item.charge, 0);
-  const costAmount = Number(originalCostAmount) + nextHistory.reduce((sum, item) => sum + item.costAmount, 0);
-  if (!Number.isSafeInteger(amount) || !Number.isSafeInteger(costAmount)) throw new Error('Total biaya rental terlalu besar atau tidak valid.');
-  return {
-    ...state,
-    transactions: state.transactions.map((item) => item.id === transaction.id ? {
-      ...item, startedAt, rentalTimeZone: timeZone, originalDueAt: item.originalDueAt || previousDueAt, dueAt,
-      originalAmount, originalCostAmount, amount, costAmount, grossProfit: amount - costAmount,
-      extensionHistory: nextHistory,
-    } : item),
-  };
-};
-
-// Financial rows are projections of one lifecycle, not new stored rental transactions.
-// Attribute each additional charge/cost to its own date and settlement state.
-export const getFinancialEntries = (transactions) => transactions.flatMap((transaction) => {
-  const history = transaction.extensionHistory || [];
-  if (!history.length) return [transaction];
-  return [
-    { ...transaction, amount: transaction.originalAmount, costAmount: transaction.originalCostAmount, sourceTransactionId: transaction.id },
-    ...history.map((event) => ({
-      ...transaction, id: `extend-${event.id}`, sourceTransactionId: transaction.id, extensionId: event.id,
-      date: event.date || toDateTimeInput(event.extendedAt, transaction.rentalTimeZone || localTimeZone()).slice(0, 10), timestamp: event.extendedAt,
-      amount: event.charge, costAmount: event.costAmount, settled: event.settled, settledAt: event.settledAt,
-      note: `Perpanjangan ${transaction.rentalCode || `#${transaction.id}`} / +${formatRentalDuration(event.additionalDays)}`,
-      extensionHistory: [], switchHistory: [],
-    })),
-  ];
 });

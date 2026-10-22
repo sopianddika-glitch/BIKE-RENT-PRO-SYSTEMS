@@ -9,7 +9,7 @@ const seed = async (page, legacy = false) => {
     localStorage.clear();
     const transaction = { id: 10, category: 'rental', type: 'pendapatan', date: '2026-10-22', startedAt: '2026-10-22T02:30:00Z', dueAt: '2026-10-23T02:30:00Z', originalDueAt: '2026-10-23T02:30:00Z', bikeId: 1, bikeNumber: 'A-001', customerName: 'Tamu Durasi', rentalCode: 'R-DURATION', rentalGroupId: 'group-duration', amount: 100000, costAmount: 30000, grossProfit: 70000, settled: true, settledAt: '2026-10-22T02:30:00Z', returnedAt: null, note: 'Kesepakatan awal', switchHistory: [], extensionHistory: [] };
     if (old) { delete transaction.startedAt; delete transaction.dueAt; delete transaction.originalDueAt; }
-    localStorage.setItem('bike-rent-pro:operations', JSON.stringify({ schemaVersion: 1, revision: 0, bikes: [{ id: 1, number: 'A-001', type: 'City Bike', status: 'disewa', note: '' }, { id: 2, number: 'B-002', type: 'Mountain Bike', status: 'tersedia', note: '' }], transactions: [transaction] }));
+    localStorage.setItem('bike-rent-pro:operations', JSON.stringify({ schemaVersion: 1, revision: 0, bikes: [{ id: 1, number: 'A-001', type: 'City Bike', status: 'disewa', note: '' }, { id: 2, number: 'B-002', type: 'Mountain Bike', status: 'tersedia', dailyRate: 50000, halfDayRate: 30000, dailyCost: 30000, halfDayCost: 15000, note: '' }], transactions: [transaction] }));
   }, legacy);
   await page.goto('/#rental');
   await page.reload();
@@ -102,7 +102,7 @@ test('switch + multiple extend + settlement + return use one lifecycle and lates
 test('configured extension quote, custom maximum, and cancellation are consistent', async ({ page }) => {
   await seed(page);
   await page.getByRole('button', { name: 'Pengaturan', exact: true }).click();
-  await page.getByText('Tarif Perpanjangan per Tipe', { exact: true }).click();
+  await page.getByText('Tarif Perpanjangan Rental Lama per Tipe', { exact: true }).click();
   await page.getByLabel('Harga extend ½ Hari City Bike', { exact: true }).fill('20000');
   await page.getByLabel('Modal extend ½ Hari City Bike', { exact: true }).fill('5000');
   await page.getByRole('tab', { name: 'Bisnis & Workflow' }).click();
