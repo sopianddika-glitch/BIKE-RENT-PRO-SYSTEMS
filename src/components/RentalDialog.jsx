@@ -35,6 +35,8 @@ export default function RentalDialog({
   const [search, setSearch] = useState('');
   const [localError, setLocalError] = useState('');
   const dialogRef = useRef(null);
+  const submittingRef = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const selectedIds = useMemo(() => new Set(form.bikeIds.map(Number)), [form.bikeIds]);
   const selectedBikes = useMemo(
@@ -62,6 +64,7 @@ export default function RentalDialog({
     const previousFocus = document.activeElement;
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
+        if (submittingRef.current) return;
         onClose();
         return;
       }
@@ -128,30 +131,35 @@ export default function RentalDialog({
     setStep((current) => Math.min(3, current + 1));
   };
 
-  const submit = (event) => {
-    if (step < 3) {
-      event.preventDefault();
-      goForward();
-      return;
-    }
-    const result = onSubmit(event);
-    if (result?.success) {
-      setStep(1);
-      setSearch('');
-      setLocalError('');
-      onClose();
+  const submit = async (event) => {
+    event.preventDefault();
+    if (submittingRef.current) return;
+    if (step < 3) { goForward(); return; }
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      const result = await onSubmit(event);
+      if (result?.success) {
+        setStep(1);
+        setSearch('');
+        setLocalError('');
+        onClose();
+      }
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-5" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-5" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !submittingRef.current) onClose(); }}>
       <form ref={dialogRef} onSubmit={submit} className="flex max-h-[96vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-lg bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-lg" role="dialog" aria-modal="true" aria-labelledby="rental-dialog-title">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.16em] text-cyan-700">Penyewaan Cepat</p>
             <h2 id="rental-dialog-title" className="mt-1 text-xl font-black text-slate-950">Penyewaan Baru</h2>
           </div>
-          <button type="button" onClick={onClose} className="rounded-md p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950" aria-label="Tutup penyewaan"><X size={19} /></button>
+          <button type="button" disabled={submitting} onClick={onClose} className="rounded-md p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950" aria-label="Tutup penyewaan"><X size={19} /></button>
         </div>
 
         <ol className="grid grid-cols-3 border-b border-slate-200 bg-slate-50 px-3 sm:px-6" aria-label="Tahapan penyewaan">
@@ -244,10 +252,10 @@ export default function RentalDialog({
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-4 sm:px-6">
-          {step === 1 ? <button type="button" onClick={onClose} className="rounded-md px-3 py-2.5 text-xs font-black text-slate-700 hover:bg-slate-100">Batal</button> : <button type="button" onClick={() => { setLocalError(''); setStep((current) => Math.max(1, current - 1)); }} className="inline-flex items-center gap-2 rounded-md px-3 py-2.5 text-xs font-black text-slate-700 hover:bg-slate-100"><ArrowLeft size={15} /> Kembali</button>}
+          {step === 1 ? <button type="button" disabled={submitting} onClick={onClose} className="rounded-md px-3 py-2.5 text-xs font-black text-slate-700 hover:bg-slate-100">Batal</button> : <button type="button" disabled={submitting} onClick={() => { setLocalError(''); setStep((current) => Math.max(1, current - 1)); }} className="inline-flex items-center gap-2 rounded-md px-3 py-2.5 text-xs font-black text-slate-700 hover:bg-slate-100"><ArrowLeft size={15} /> Kembali</button>}
           <div className="flex items-center gap-3">
             <span className="hidden text-xs font-bold text-slate-600 sm:inline">{selectedBikes.length} unit dipilih</span>
-            {step < 3 ? <button type="submit" className="inline-flex items-center gap-2 rounded-md bg-slate-950 px-4 py-3 text-xs font-black text-white transition hover:bg-cyan-800">{step === 1 ? 'Lanjut ke Pelanggan' : 'Tinjau Transaksi'} <ArrowRight size={15} /></button> : <button type="submit" className="inline-flex items-center gap-2 rounded-md bg-emerald-700 px-4 py-3 text-xs font-black text-white transition hover:bg-emerald-800"><CheckCircle2 size={16} /> Aktifkan {selectedBikes.length} Unit</button>}
+            {step < 3 ? <button type="submit" disabled={submitting} className="inline-flex items-center gap-2 rounded-md bg-slate-950 px-4 py-3 text-xs font-black text-white transition hover:bg-cyan-800">{step === 1 ? 'Lanjut ke Pelanggan' : 'Tinjau Transaksi'} <ArrowRight size={15} /></button> : <button type="submit" disabled={submitting} className="inline-flex items-center gap-2 rounded-md bg-emerald-700 px-4 py-3 text-xs font-black text-white transition hover:bg-emerald-800"><CheckCircle2 size={16} /> Aktifkan {selectedBikes.length} Unit</button>}
           </div>
         </div>
       </form>

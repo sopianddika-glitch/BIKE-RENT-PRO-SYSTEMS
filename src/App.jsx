@@ -22,10 +22,10 @@ import {
 } from './lib/domain.js';
 import { normalizeText } from './lib/formatters.js';
 import { loadState, saveState } from './lib/storage.js';
+import useOperations from './lib/useOperations.js';
+import { getSwitchActivities, getReplacementBikes, switchRentalUnit } from './lib/unitSwitch.js';
 
 const STORAGE_KEYS = {
-  bikes: 'bike-rent-pro:bikes',
-  transactions: 'bike-rent-pro:transactions',
   rentalRates: 'bike-rent-pro:rental-rates',
   systemSettings: 'bike-rent-pro:system-settings',
 };
@@ -47,16 +47,6 @@ const getTodayInput = () => {
 const createRentalForm = () => ({ date: getTodayInput(), bikeIds: [], customerName: '', customerContact: '', prices: {}, note: '' });
 const createFinanceForm = () => ({ date: getTodayInput(), type: 'pengeluaran', amount: '', note: '' });
 
-const loadBikes = () => {
-  const value = loadState(STORAGE_KEYS.bikes, initialBikes);
-  return Array.isArray(value) ? value.map(normalizeBike) : initialBikes.map(normalizeBike);
-};
-
-const loadTransactions = () => {
-  const value = loadState(STORAGE_KEYS.transactions, initialTransactions);
-  return Array.isArray(value) ? value.map(normalizeTransaction) : initialTransactions.map(normalizeTransaction);
-};
-
 const loadSystemSettings = () => normalizeSystemSettings(loadState(STORAGE_KEYS.systemSettings, initialSystemSettings));
 
 const getInitialPage = () => {
@@ -67,8 +57,7 @@ const getInitialPage = () => {
 
 export default function App() {
   const [activePage, setActivePage] = useState(getInitialPage);
-  const [bikes, setBikes] = useState(loadBikes);
-  const [transactions, setTransactions] = useState(loadTransactions);
+  const { bikes, transactions, update: updateOperations } = useOperations();
   const [rentalRates, setRentalRates] = useState(() => loadState(STORAGE_KEYS.rentalRates, initialRentalRates));
   const [systemSettings, setSystemSettings] = useState(loadSystemSettings);
   const [quickFilter, setQuickFilter] = useState(() => loadSystemSettings().defaultDashboardRange);
@@ -80,8 +69,6 @@ export default function App() {
   const [notice, setNotice] = useState(null);
   const [rentalDialogRequest, setRentalDialogRequest] = useState(false);
 
-  useEffect(() => saveState(STORAGE_KEYS.bikes, bikes), [bikes]);
-  useEffect(() => saveState(STORAGE_KEYS.transactions, transactions), [transactions]);
   useEffect(() => saveState(STORAGE_KEYS.rentalRates, rentalRates), [rentalRates]);
   useEffect(() => saveState(STORAGE_KEYS.systemSettings, systemSettings), [systemSettings]);
 
@@ -141,8 +128,9 @@ export default function App() {
     return Array.from(groups.values()).map((group) => ({ ...group, laba: group.pendapatan - group.pengeluaran }));
   }, [filteredTransactions]);
 
-  const recentTransactions = useMemo(() => [...filteredTransactions].sort((first, second) => second.date.localeCompare(first.date) || second.id - first.id), [filteredTransactions]);
-  const availableBikes = useMemo(() => bikes.filter((bike) => bike.status === 'tersedia'), [bikes]);
+  const recentTransactions = useMemo(() => [...filteredTransactions, ...getSwitchActivities(transactions).filter((event) => isDateWithinRange(event.date, effectiveDateRange))]
+    .sort((first, second) => `${second.timestamp || second.date}`.localeCompare(`${first.timestamp || first.date}`) || Number(second.id) - Number(first.id)), [effectiveDateRange, filteredTransactions, transactions]);
+  const availableBikes = useMemo(() => getReplacementBikes(bikes, transactions, null), [bikes, transactions]);
   const bikeTypes = useMemo(() => Array.from(new Set([...bikes.map((bike) => bike.type).filter(Boolean), ...Object.keys(rentalRates)])).sort((first, second) => first.localeCompare(second)), [bikes, rentalRates]);
   const suggestedUnitNumber = useMemo(() => getNextUnitNumber(bikes, systemSettings), [bikes, systemSettings]);
 
@@ -171,77 +159,87 @@ export default function App() {
     setRentalForm((current) => ({ ...current, [field]: value }));
   };
 
-  const handleCreateRental = (event) => {
-    event.preventDefault();
-    const selectedIds = new Set(rentalForm.bikeIds.map(Number));
-    const selectedBikes = bikes.filter((bike) => selectedIds.has(bike.id));
-    const customerName = rentalForm.customerName.trim();
-    if (!selectedBikes.length || selectedBikes.some((bike) => bike.status !== 'tersedia')) {
-      setRentalError('Pilih minimal satu unit yang tersedia.');
-      return { error: true };
+  const commitOperation = async (updater, message, options = {}) => {
+    try {
+      const result = await updateOperations(updater, options);
+      if (message) showNotice(typeof message === 'function' ? message(result) : message, options.tone || 'success');
+      return result;
+    } catch (error) {
+      showNotice(error.message, 'error');
+      return { error: error.message };
     }
-    if (!customerName || !rentalForm.date) {
-      setRentalError('Nama tamu dan tanggal sewa wajib diisi.');
-      return { error: true };
-    }
-    if (selectedBikes.some((bike) => Number(rentalForm.prices[bike.id]) <= 0)) {
-      setRentalError('Harga setiap unit harus lebih dari nol.');
-      return { error: true };
-    }
-
-    const nextId = transactions.length ? Math.max(...transactions.map((transaction) => transaction.id)) + 1 : 1;
-    const rentalGroupId = `rental-${Date.now()}-${nextId}`;
-    const rentalCode = createRentalCode(rentalForm.date, nextId, systemSettings);
-    const rentalNote = rentalForm.note.trim();
-    const customerContact = rentalForm.customerContact.trim();
-    const newTransactions = selectedBikes.map((bike, index) => {
-      const rate = getRate(bike.type);
-      const amount = Number(rentalForm.prices[bike.id]);
-      return {
-        id: nextId + index,
-        date: rentalForm.date,
-        type: 'pendapatan',
-        category: 'rental',
-        amount,
-        note: `Sewa ${bike.number} / ${customerName}${rentalNote ? ` / ${rentalNote}` : ''}`,
-        bikeId: bike.id,
-        bikeNumber: bike.number,
-        customerName,
-        customerContact,
-        rentalNote,
-        rentalGroupId,
-        rentalCode,
-        rentalUnitCount: selectedBikes.length,
-        costAmount: rate.cost,
-        grossProfit: amount - rate.cost,
-        settled: false,
-        settledAt: null,
-        returnedAt: null,
-        returnDate: null,
-      };
-    });
-    setTransactions((current) => [...newTransactions, ...current]);
-    setBikes((current) => current.map((item) => (selectedIds.has(item.id) ? { ...item, status: 'disewa' } : item)));
-    setRentalForm(createRentalForm());
-    showNotice(`${selectedBikes.length} unit untuk ${customerName} berhasil diaktifkan.`);
-    return { success: true, rentalCode, unitCount: selectedBikes.length };
   };
+
+  const handleCreateRental = async (event) => {
+    event.preventDefault();
+    const result = await commitOperation((current) => {
+      const selectedIds = new Set(rentalForm.bikeIds.map(Number));
+      const selectedBikes = current.bikes.filter((bike) => selectedIds.has(bike.id));
+      const available = getReplacementBikes(current.bikes, current.transactions, null);
+      if (!selectedBikes.length || selectedBikes.length !== selectedIds.size || selectedBikes.some((bike) => !available.some((item) => item.id === bike.id))) {
+        throw new Error('Unit ini sudah tidak tersedia. Pilih unit lain.');
+      }
+      const customerName = rentalForm.customerName.trim();
+      if (!customerName || !rentalForm.date) throw new Error('Nama tamu dan tanggal sewa wajib diisi.');
+      if (selectedBikes.some((bike) => !Number.isFinite(Number(rentalForm.prices[bike.id])) || Number(rentalForm.prices[bike.id]) <= 0)) {
+        throw new Error('Harga setiap unit harus lebih dari nol.');
+      }
+      const nextId = current.transactions.length ? Math.max(...current.transactions.map((transaction) => transaction.id)) + 1 : 1;
+      const rentalGroupId = `rental-${Date.now()}-${nextId}`;
+      const rentalCode = createRentalCode(rentalForm.date, nextId, systemSettings);
+      const rentalNote = rentalForm.note.trim();
+      const customerContact = rentalForm.customerContact.trim();
+      const newTransactions = selectedBikes.map((bike, index) => {
+        const rate = getRate(bike.type);
+        const amount = Number(rentalForm.prices[bike.id]);
+        return normalizeTransaction({
+          id: nextId + index, date: rentalForm.date, startedAt: rentalForm.date === getTodayInput() ? new Date().toISOString() : null,
+          type: 'pendapatan', category: 'rental', amount,
+          note: `Sewa ${bike.number} / ${customerName}${rentalNote ? ` / ${rentalNote}` : ''}`,
+          bikeId: bike.id, bikeNumber: bike.number, customerName, customerContact, rentalNote,
+          rentalGroupId, rentalCode, rentalUnitCount: selectedBikes.length,
+          costAmount: rate.cost, grossProfit: amount - rate.cost, settled: false, settledAt: null,
+          returnedAt: null, returnDate: null,
+        });
+      });
+      return {
+        ...current,
+        transactions: [...newTransactions, ...current.transactions],
+        bikes: current.bikes.map((bike) => selectedIds.has(bike.id) ? { ...bike, status: 'disewa' } : bike),
+        result: { success: true, rentalCode, unitCount: selectedBikes.length, customerName },
+      };
+    }, ({ unitCount, customerName }) => `${unitCount} unit untuk ${customerName} berhasil diaktifkan.`);
+    if (result.error) setRentalError(result.error);
+    else setRentalForm(createRentalForm());
+    return result;
+  };
+
+  const handleSwitchUnit = (request) => commitOperation((current) => {
+    const next = switchRentalUnit(current, request);
+    const transaction = next.transactions.find((item) => item.id === request.rentalId);
+    const event = transaction.switchHistory.at(-1);
+    return { ...next, result: { success: true, from: event.fromBikeNumber, to: event.toBikeNumber } };
+  }, ({ from, to }) => `Unit berhasil diganti dari ${from} ke ${to}.`, { requireLock: true });
 
   const handleReturnBikes = (bikeIds) => {
     const selectedIds = new Set(bikeIds.map(Number));
-    const selectedBikes = bikes.filter((bike) => selectedIds.has(bike.id) && bike.status === 'disewa');
-    if (!selectedBikes.length) return;
-    const returnedAt = new Date().toISOString();
-    const returnDate = getTodayInput();
-    setBikes((current) => current.map((item) => (selectedIds.has(item.id) ? { ...item, status: 'tersedia' } : item)));
-    setTransactions((current) => current.map((transaction) => (
-      selectedIds.has(Number(transaction.bikeId)) && transaction.category === 'rental' && !transaction.returnedAt
-        ? { ...transaction, returnedAt, returnDate }
-        : transaction
-    )));
-    showNotice(selectedBikes.length === 1
-      ? `${selectedBikes[0].number} selesai disewa dan kembali tersedia.`
-      : `${selectedBikes.length} unit selesai disewa dan kembali tersedia.`);
+    const expected = new Map(activeRentals.filter(({ bike }) => selectedIds.has(bike.id)).map(({ bike, transaction }) => [bike.id, transaction?.id ?? null]));
+    return commitOperation((current) => {
+      const selectedBikes = current.bikes.filter((bike) => selectedIds.has(bike.id) && bike.status === 'disewa');
+      if (!selectedBikes.length || selectedBikes.length !== selectedIds.size) throw new Error('Unit rental sudah berubah. Muat ulang daftar rental aktif.');
+      for (const bike of selectedBikes) {
+        const transaction = getActiveRentals(current.bikes, current.transactions).find((item) => item.bike.id === bike.id)?.transaction;
+        if (!expected.has(bike.id) || expected.get(bike.id) !== (transaction?.id ?? null)) throw new Error('Rental sudah berubah. Periksa unit aktif sebelum pengembalian.');
+      }
+      const returnedAt = new Date().toISOString();
+      return {
+        ...current,
+        bikes: current.bikes.map((bike) => selectedIds.has(bike.id) ? { ...bike, status: 'tersedia' } : bike),
+        transactions: current.transactions.map((transaction) => selectedIds.has(Number(transaction.bikeId)) && transaction.category === 'rental' && !transaction.returnedAt
+          ? { ...transaction, returnedAt, returnDate: getTodayInput() } : transaction),
+        result: { success: true, count: selectedBikes.length, number: selectedBikes[0].number },
+      };
+    }, ({ count, number }) => count === 1 ? `${number} selesai disewa dan kembali tersedia.` : `${count} unit selesai disewa dan kembali tersedia.`);
   };
 
   const handleReturnBike = (bikeId) => handleReturnBikes([bikeId]);
@@ -252,75 +250,77 @@ export default function App() {
   };
 
   const handleFinanceChange = (field, value) => { setFinanceError(''); setFinanceForm((current) => ({ ...current, [field]: value })); };
-  const handleCreateFinance = (event) => {
+  const handleCreateFinance = async (event) => {
     event.preventDefault();
     const amount = Number(financeForm.amount);
     const note = financeForm.note.trim();
-    if (!financeForm.date || amount <= 0 || !note) { setFinanceError('Tanggal, nominal, dan keterangan wajib diisi.'); return; }
-    const nextId = transactions.length ? Math.max(...transactions.map((transaction) => transaction.id)) + 1 : 1;
-    setTransactions((current) => [{ id: nextId, date: financeForm.date, type: financeForm.type, category: 'manual', amount, note, bikeId: null, costAmount: 0, grossProfit: null, settled: null, returnedAt: null }, ...current]);
-    setFinanceForm(createFinanceForm());
-    showNotice('Transaksi keuangan berhasil disimpan.');
+    if (!financeForm.date || !Number.isFinite(amount) || amount <= 0 || !note) { setFinanceError('Tanggal, nominal, dan keterangan wajib diisi.'); return; }
+    const result = await commitOperation((current) => {
+      const nextId = current.transactions.length ? Math.max(...current.transactions.map((transaction) => transaction.id)) + 1 : 1;
+      return { ...current, transactions: [{ id: nextId, date: financeForm.date, type: financeForm.type, category: 'manual', amount, note, bikeId: null, costAmount: 0, grossProfit: null, settled: null, returnedAt: null }, ...current.transactions] };
+    }, 'Transaksi keuangan berhasil disimpan.');
+    if (result.error) setFinanceError(result.error);
+    else setFinanceForm(createFinanceForm());
   };
 
-  const handleToggleSettlement = (transactionId) => {
-    const transaction = transactions.find((item) => item.id === transactionId);
-    const nextSettled = !transaction?.settled;
-    setTransactions((current) => current.map((item) => item.id === transactionId ? { ...item, settled: nextSettled, settledAt: nextSettled ? new Date().toISOString() : null } : item));
-    showNotice(nextSettled ? 'Setoran rental ditandai selesai.' : 'Setoran dikembalikan ke daftar tertunda.');
-  };
+  const handleToggleSettlement = (transactionId) => commitOperation((current) => {
+    const transaction = current.transactions.find((item) => item.id === transactionId);
+    if (!transaction) throw new Error('Transaksi tidak ditemukan.');
+    const nextSettled = !transaction.settled;
+    return { ...current, transactions: current.transactions.map((item) => item.id === transactionId ? { ...item, settled: nextSettled, settledAt: nextSettled ? new Date().toISOString() : null } : item), result: { success: true, settled: nextSettled } };
+  }, ({ settled }) => settled ? 'Setoran rental ditandai selesai.' : 'Setoran dikembalikan ke daftar tertunda.');
 
-  const handleDeleteTransaction = (transactionId) => {
-    const transaction = transactions.find((item) => item.id === transactionId);
-    if (transaction?.category === 'rental' && transaction.bikeId && !transaction.returnedAt) {
-      setBikes((current) => current.map((bike) => bike.id === Number(transaction.bikeId) ? { ...bike, status: 'tersedia' } : bike));
-    }
-    setTransactions((current) => current.filter((item) => item.id !== transactionId));
-    showNotice('Transaksi dihapus dan status unit telah disinkronkan.', 'warning');
-  };
+  const handleDeleteTransaction = (transactionId) => commitOperation((current) => {
+    const transaction = current.transactions.find((item) => item.id === transactionId);
+    if (!transaction) throw new Error('Transaksi tidak ditemukan.');
+    return {
+      ...current,
+      bikes: current.bikes.map((bike) => transaction.category === 'rental' && !transaction.returnedAt && bike.id === Number(transaction.bikeId) ? { ...bike, status: 'tersedia' } : bike),
+      transactions: current.transactions.filter((item) => item.id !== transactionId),
+    };
+  }, 'Transaksi dihapus dan status unit telah disinkronkan.', { tone: 'warning' });
 
-  const handleSaveBike = (form, editingId) => {
+  const handleSaveBike = (form, editingId, expectedStatus) => commitOperation((current) => {
     const number = form.number.trim().toUpperCase();
     const type = form.type.trim();
-    const duplicate = bikes.some((bike) => normalizeText(bike.number) === normalizeText(number) && bike.id !== editingId);
-    const existingBike = bikes.find((bike) => bike.id === editingId);
-    if (!number || !type) return { error: 'Nomor unit dan tipe sepeda wajib diisi.' };
-    if (duplicate) return { error: 'Nomor unit sudah terdaftar.' };
-    if (form.status === 'disewa' && existingBike?.status !== 'disewa') return { error: 'Aktifkan status disewa melalui menu Rental agar data tamu dan transaksi tetap sinkron.' };
-    if (editingId) {
-      setBikes((current) => current.map((bike) => bike.id === editingId ? { ...bike, ...form, number, type, note: form.note.trim() } : bike));
-      showNotice(`Unit ${number} berhasil diperbarui.`);
-    } else {
-      const nextId = bikes.length ? Math.max(...bikes.map((bike) => bike.id)) + 1 : 1;
-      setBikes((current) => [...current, { id: nextId, ...form, number, type, note: form.note.trim() }]);
-      showNotice(`Unit ${number} berhasil ditambahkan.`);
-    }
-    return { success: true };
-  };
+    const duplicate = current.bikes.some((bike) => normalizeText(bike.number) === normalizeText(number) && bike.id !== editingId);
+    const existingBike = current.bikes.find((bike) => bike.id === editingId);
+    if (!number || !type) throw new Error('Nomor unit dan tipe sepeda wajib diisi.');
+    if (duplicate) throw new Error('Nomor unit sudah terdaftar.');
+    if (editingId && !existingBike) throw new Error('Unit tidak ditemukan.');
+    if (editingId && existingBike.status !== expectedStatus) throw new Error('Status unit sudah berubah. Tutup editor dan buka kembali unit tersebut.');
+    if (form.status === 'disewa' && existingBike?.status !== 'disewa') throw new Error('Aktifkan status disewa melalui menu Rental agar data tamu dan transaksi tetap sinkron.');
+    const nextId = current.bikes.length ? Math.max(...current.bikes.map((bike) => bike.id)) + 1 : 1;
+    return {
+      ...current,
+      bikes: editingId ? current.bikes.map((bike) => bike.id === editingId ? { ...bike, ...form, number, type, note: form.note.trim() } : bike)
+        : [...current.bikes, { id: nextId, ...form, number, type, note: form.note.trim() }],
+      transactions: current.transactions.map((transaction) => existingBike?.status === 'disewa' && form.status !== 'disewa' && transaction.category === 'rental' && Number(transaction.bikeId) === editingId && !transaction.returnedAt
+        ? { ...transaction, returnedAt: new Date().toISOString(), returnDate: getTodayInput() } : transaction),
+      result: { success: true, number, edited: Boolean(editingId) },
+    };
+  }, ({ number, edited }) => `Unit ${number} berhasil ${edited ? 'diperbarui' : 'ditambahkan'}.`);
 
-  const handleDeleteBike = (bikeId) => {
-    const bike = bikes.find((item) => item.id === bikeId);
-    if (bike?.status === 'disewa') { showNotice('Unit yang sedang disewa tidak dapat dihapus.', 'error'); return false; }
-    setBikes((current) => current.filter((item) => item.id !== bikeId));
-    showNotice(`Unit ${bike?.number || ''} dihapus dari armada.`, 'warning');
-    return true;
-  };
+  const handleDeleteBike = (bikeId) => commitOperation((current) => {
+    const bike = current.bikes.find((item) => item.id === bikeId);
+    if (!bike) throw new Error('Unit tidak ditemukan.');
+    if (bike.status === 'disewa' || current.transactions.some((transaction) => transaction.category === 'rental' && !transaction.returnedAt && Number(transaction.bikeId) === bikeId)) throw new Error('Unit yang sedang disewa tidak dapat dihapus.');
+    return { ...current, bikes: current.bikes.filter((item) => item.id !== bikeId), result: { success: true, number: bike.number } };
+  }, ({ number }) => `Unit ${number} dihapus dari armada.`, { tone: 'warning' });
 
-  const handleStatusChange = (bikeId, status) => {
-    const bike = bikes.find((item) => item.id === bikeId);
-    if (!bike) return false;
-    if (status === 'disewa' && bike.status !== 'disewa') {
-      showNotice('Gunakan menu Rental untuk mengaktifkan unit agar transaksi tetap sinkron.', 'error');
-      return false;
-    }
-    setBikes((current) => current.map((item) => (item.id === bikeId ? { ...item, status } : item)));
-    if (bike?.status === 'disewa' && status !== 'disewa') {
-      const activeTransaction = [...transactions].filter((transaction) => Number(transaction.bikeId) === bikeId && !transaction.returnedAt).sort((first, second) => second.id - first.id)[0];
-      if (activeTransaction) setTransactions((current) => current.map((transaction) => transaction.id === activeTransaction.id ? { ...transaction, returnedAt: new Date().toISOString(), returnDate: getTodayInput() } : transaction));
-    }
-    showNotice(`Status ${bike?.number || 'unit'} berhasil diperbarui.`);
-    return true;
-  };
+  const handleStatusChange = (bikeId, status) => commitOperation((current) => {
+    const bike = current.bikes.find((item) => item.id === bikeId);
+    if (!bike) throw new Error('Unit tidak ditemukan.');
+    if (bike.status !== bikes.find((item) => item.id === bikeId)?.status) throw new Error('Status unit sudah berubah. Periksa kembali daftar Unit.');
+    if (status === 'disewa' && bike.status !== 'disewa') throw new Error('Gunakan menu Rental untuk mengaktifkan unit agar transaksi tetap sinkron.');
+    return {
+      ...current,
+      bikes: current.bikes.map((item) => item.id === bikeId ? { ...item, status } : item),
+      transactions: current.transactions.map((transaction) => bike.status === 'disewa' && status !== 'disewa' && transaction.category === 'rental' && Number(transaction.bikeId) === bikeId && !transaction.returnedAt
+        ? { ...transaction, returnedAt: new Date().toISOString(), returnDate: getTodayInput() } : transaction),
+      result: { success: true, number: bike.number },
+    };
+  }, ({ number }) => `Status ${number} berhasil diperbarui.`);
 
   const handleRateChange = (type, field, value) => {
     const numericValue = Math.max(0, Number(value) || 0);
@@ -362,7 +362,7 @@ export default function App() {
   };
 
   const handleExportData = () => {
-    const payload = JSON.stringify({ schemaVersion: 4, exportedAt: new Date().toISOString(), bikes, transactions, rentalRates, systemSettings }, null, 2);
+    const payload = JSON.stringify({ schemaVersion: 5, exportedAt: new Date().toISOString(), bikes, transactions, rentalRates, systemSettings }, null, 2);
     const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
     const link = document.createElement('a');
     link.href = url;
@@ -378,8 +378,8 @@ export default function App() {
     try {
       const payload = JSON.parse(await file.text());
       if (!Array.isArray(payload.bikes) || !Array.isArray(payload.transactions) || !payload.rentalRates) throw new Error('Format backup tidak valid');
-      setBikes(payload.bikes.map(normalizeBike));
-      setTransactions(payload.transactions.map(normalizeTransaction));
+      const result = await commitOperation((current) => ({ ...current, bikes: payload.bikes.map(normalizeBike), transactions: payload.transactions.map(normalizeTransaction) }));
+      if (result.error) return;
       setRentalRates(Object.fromEntries(Object.entries(payload.rentalRates).map(([type, rate]) => [type, normalizeRentalRate(rate)])));
       const importedSettings = normalizeSystemSettings(payload.systemSettings);
       setSystemSettings(importedSettings);
@@ -393,9 +393,9 @@ export default function App() {
     }
   };
 
-  const handleResetData = () => {
-    setBikes(initialBikes.map(normalizeBike));
-    setTransactions(initialTransactions.map(normalizeTransaction));
+  const handleResetData = async () => {
+    const result = await commitOperation((current) => ({ ...current, bikes: initialBikes.map(normalizeBike), transactions: initialTransactions.map(normalizeTransaction) }));
+    if (result.error) return;
     setRentalRates(initialRentalRates);
     setSystemSettings(initialSystemSettings);
     setQuickFilter(initialSystemSettings.defaultDashboardRange);
@@ -410,7 +410,7 @@ export default function App() {
   return (
     <AppShell activePage={activePage} onNavigate={navigateTo} pageTitle={meta.title} pageSubtitle={meta.subtitle} notice={notice} systemSettings={systemSettings}>
       {activePage === 'dashboard' ? <DashboardPage stats={stats} fleetOverview={fleetOverview} systemSettings={systemSettings} dateFilter={dateFilter} recentTransactions={recentTransactions} activeRentals={activeRentals} onNavigate={navigateTo} onStartRental={handleStartRental} onReturnBike={handleReturnBike} /> : null}
-      {activePage === 'rental' ? <RentalPage availableBikes={availableBikes} activeRentals={activeRentals} form={rentalForm} error={rentalError} getRate={getRate} openRequest={rentalDialogRequest} onOpenRequestHandled={() => setRentalDialogRequest(false)} onChange={handleRentalChange} onSubmit={handleCreateRental} onReturnBike={handleReturnBike} onReturnBikes={handleReturnBikes} onNavigate={navigateTo} /> : null}
+      {activePage === 'rental' ? <RentalPage bikes={bikes} transactions={transactions} onSwitchUnit={handleSwitchUnit} availableBikes={availableBikes} activeRentals={activeRentals} form={rentalForm} error={rentalError} getRate={getRate} openRequest={rentalDialogRequest} onOpenRequestHandled={() => setRentalDialogRequest(false)} onChange={handleRentalChange} onSubmit={handleCreateRental} onReturnBike={handleReturnBike} onReturnBikes={handleReturnBikes} onNavigate={navigateTo} /> : null}
       {activePage === 'fleet' ? <FleetPage bikes={bikes} bikeTypes={bikeTypes} suggestedUnitNumber={suggestedUnitNumber} getRate={getRate} onSaveBike={handleSaveBike} onDeleteBike={handleDeleteBike} onStatusChange={handleStatusChange} /> : null}
       {activePage === 'finance' ? <FinancePage stats={stats} groups={transactionGroups} dateFilter={dateFilter} form={financeForm} error={financeError} onChange={handleFinanceChange} onSubmit={handleCreateFinance} onToggleSettlement={handleToggleSettlement} onDelete={handleDeleteTransaction} /> : null}
       {activePage === 'settings' ? <SettingsPage bikeTypes={bikeTypes} bikes={bikes} transactions={transactions} systemSettings={systemSettings} dataHealth={dataHealth} suggestedUnitNumber={suggestedUnitNumber} getRate={getRate} onRateChange={handleRateChange} onAddBikeType={handleAddBikeType} onRemoveBikeType={handleRemoveBikeType} onSettingChange={handleSystemSettingChange} onExport={handleExportData} onImport={handleImportData} onReset={handleResetData} /> : null}

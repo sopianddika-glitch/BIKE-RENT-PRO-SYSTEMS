@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Bike, Plus, RefreshCw, Search, UsersRound, WalletCards } from 'lucide-react';
+import { ArrowLeftRight, ArrowRight, Bike, Plus, RefreshCw, Search, UsersRound, WalletCards } from 'lucide-react';
 import EmptyState from '../components/EmptyState.jsx';
 import RentalDialog from '../components/RentalDialog.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
+import SwitchUnitDialog from '../components/SwitchUnitDialog.jsx';
+import UnitHistory from '../components/UnitHistory.jsx';
 import { formatCurrency, formatDate } from '../lib/formatters.js';
 
 export default function RentalPage({
+  bikes,
+  transactions,
+  onSwitchUnit,
   availableBikes,
   activeRentals,
   form,
@@ -21,6 +26,8 @@ export default function RentalPage({
 }) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const closeDialog = useCallback(() => setIsDialogOpen(false), []);
+  const [switchTarget, setSwitchTarget] = useState(null);
+  const closeSwitchDialog = useCallback(() => setSwitchTarget(null), []);
 
   useEffect(() => {
     if (openRequest) {
@@ -98,12 +105,18 @@ export default function RentalPage({
 
                   <div className="divide-y divide-slate-100">
                     {group.items.map(({ bike, transaction }) => (
-                      <div key={bike.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-cyan-50 text-cyan-700"><Bike size={19} /></div>
-                          <div className="min-w-0"><div className="flex items-center gap-2"><p className="font-black text-slate-950">{bike.number}</p><StatusBadge status="disewa" /></div><p className="mt-1 truncate text-xs font-semibold text-slate-600">{bike.type} / {formatCurrency(transaction?.amount || 0)}</p></div>
+                      <div key={bike.id} className="px-5 py-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-cyan-50 text-cyan-700"><Bike size={19} /></div>
+                            <div className="min-w-0"><div className="flex items-center gap-2"><p className="font-black text-slate-950">{bike.number}</p><StatusBadge status="disewa" /></div><p className="mt-1 truncate text-xs font-semibold text-slate-600">{bike.type} / {formatCurrency(transaction?.amount || 0)}</p></div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {transaction ? <button type="button" aria-label={`Ganti Unit ${bike.number}`} onClick={() => setSwitchTarget({ bike, transaction })} className="inline-flex items-center justify-center gap-2 rounded-md bg-cyan-50 px-3 py-3 text-xs font-black text-cyan-800 hover:bg-cyan-100"><ArrowLeftRight size={14} /> Ganti Unit</button> : null}
+                            <button type="button" onClick={() => onReturnBike(bike.id)} className="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-50 px-3 py-3 text-xs font-black text-emerald-800 transition hover:bg-emerald-100"><RefreshCw size={14} /> Kembalikan</button>
+                          </div>
                         </div>
-                        <button type="button" onClick={() => onReturnBike(bike.id)} className="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-800 transition hover:bg-emerald-100"><RefreshCw size={14} /> Kembalikan</button>
+                        <UnitHistory transaction={transaction} />
                       </div>
                     ))}
                   </div>
@@ -126,6 +139,7 @@ export default function RentalPage({
         <button type="button" onClick={() => setIsDialogOpen(true)} disabled={!availableBikes.length} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-cyan-300 disabled:opacity-50"><span><span className="text-[9px] font-black uppercase tracking-wide text-slate-600">Cepat</span><span className="mt-1 block text-sm font-black text-slate-950">Tambah pesanan</span></span><Plus size={18} className="text-cyan-700" /></button>
       </section>
 
+      {switchTarget ? <SwitchUnitDialog target={switchTarget} bikes={bikes} transactions={transactions} onSubmit={onSwitchUnit} onClose={closeSwitchDialog} /> : null}
       <RentalDialog open={isDialogOpen} availableBikes={availableBikes} form={form} error={error} getRate={getRate} onChange={onChange} onSubmit={onSubmit} onClose={closeDialog} />
     </div>
   );

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Bike, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import EmptyState from '../components/EmptyState.jsx';
 import { BIKE_STATUSES, STATUS_META } from '../data/seed.js';
@@ -20,6 +20,8 @@ export default function FleetPage({ bikes, bikeTypes, suggestedUnitNumber, getRa
   const [editingBike, setEditingBike] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState('');
+  const submittingRef = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
   const [deleteBike, setDeleteBike] = useState(null);
 
   const filteredBikes = useMemo(() => {
@@ -52,14 +54,19 @@ export default function FleetPage({ bikes, bikeTypes, suggestedUnitNumber, getRa
     setError('');
   };
 
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault();
-    const result = onSaveBike(form, editingBike?.id);
-    if (result?.error) {
-      setError(result.error);
-      return;
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      const result = await onSaveBike(form, editingBike?.id, editingBike?.status);
+      if (result?.error) { setError(result.error); return; }
+      closeEditor();
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
-    closeEditor();
   };
 
   return (
@@ -115,14 +122,14 @@ export default function FleetPage({ bikes, bikeTypes, suggestedUnitNumber, getRa
               <div className="sm:col-span-2"><label htmlFor="fleet-note" className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-slate-500">Catatan</label><textarea id="fleet-note" rows="3" value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="Kondisi, lokasi, atau informasi unit" className="w-full resize-none rounded-md border border-slate-200 px-3 py-3 text-sm font-semibold outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" /></div>
               {error ? <p className="rounded-md bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 sm:col-span-2" role="alert">{error}</p> : null}
             </div>
-            <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4"><button type="button" onClick={closeEditor} className="rounded-md bg-slate-100 px-4 py-2.5 text-xs font-black text-slate-700">Batal</button><button type="submit" className="rounded-md bg-slate-950 px-5 py-2.5 text-xs font-black text-white hover:bg-cyan-700">Simpan Unit</button></div>
+            <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4"><button type="button" onClick={closeEditor} className="rounded-md bg-slate-100 px-4 py-2.5 text-xs font-black text-slate-700">Batal</button><button type="submit" disabled={submitting} className="rounded-md bg-slate-950 px-5 py-2.5 text-xs font-black text-white hover:bg-cyan-700">Simpan Unit</button></div>
           </form>
         </div>
       ) : null}
 
       {deleteBike ? (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm" role="alertdialog" aria-modal="true" aria-labelledby="delete-bike-title">
-          <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl"><div className="flex h-10 w-10 items-center justify-center rounded-md bg-rose-50 text-rose-700"><Trash2 size={19} /></div><h2 id="delete-bike-title" className="mt-4 text-base font-black text-slate-950">Hapus {deleteBike.number}?</h2><p className="mt-2 text-sm font-semibold leading-6 text-slate-500">Unit akan dihapus dari katalog armada.</p><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setDeleteBike(null)} className="rounded-md bg-slate-100 px-4 py-2.5 text-xs font-black text-slate-700">Batal</button><button type="button" onClick={() => { if (onDeleteBike(deleteBike.id) !== false) setDeleteBike(null); }} className="rounded-md bg-rose-600 px-4 py-2.5 text-xs font-black text-white">Hapus Unit</button></div></div>
+          <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl"><div className="flex h-10 w-10 items-center justify-center rounded-md bg-rose-50 text-rose-700"><Trash2 size={19} /></div><h2 id="delete-bike-title" className="mt-4 text-base font-black text-slate-950">Hapus {deleteBike.number}?</h2><p className="mt-2 text-sm font-semibold leading-6 text-slate-500">Unit akan dihapus dari katalog armada.</p><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setDeleteBike(null)} className="rounded-md bg-slate-100 px-4 py-2.5 text-xs font-black text-slate-700">Batal</button><button type="button" onClick={async () => { const result = await onDeleteBike(deleteBike.id); if (result?.success) setDeleteBike(null); }} className="rounded-md bg-rose-600 px-4 py-2.5 text-xs font-black text-white">Hapus Unit</button></div></div>
         </div>
       ) : null}
     </div>

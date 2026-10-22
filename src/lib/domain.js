@@ -36,6 +36,7 @@ export const normalizeTransaction = (transaction = {}) => ({
   returnedAt: transaction.returnedAt || null,
   rentalGroupId: transaction.rentalGroupId || null,
   rentalCode: transaction.rentalCode || null,
+  switchHistory: Array.isArray(transaction.switchHistory) ? transaction.switchHistory : [],
 });
 
 export const normalizeSystemSettings = (settings = {}) => {

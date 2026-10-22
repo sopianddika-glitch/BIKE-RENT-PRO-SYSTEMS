@@ -13,6 +13,16 @@ Konsol operasional responsif untuk mengelola armada, penyewaan, pengembalian, au
 
 Data aplikasi disimpan otomatis di `localStorage` browser.
 
+## Ganti Unit pada Rental Aktif
+
+Pada halaman **Rental**, pilih **Ganti Unit** di unit yang memiliki transaksi rental aktif. Cari unit pengganti yang tersedia, pilih alasan, kondisi unit lama, serta catatan, lalu tinjau dan pilih **Konfirmasi Ganti Unit**. Alasan **Lainnya** wajib disertai catatan. Kerusakan/masalah teknis menggunakan kondisi awal **Dalam Perbaikan** (`bengkel`); staf dapat meninjaunya sebelum konfirmasi.
+
+ID transaksi, kode pesanan, data tamu, tanggal mulai, tarif, modal, laba, pembayaran, dan setoran dipertahankan. Referensi `bikeId`/`bikeNumber` mengikuti unit aktif; `originalBikeId`/`originalBikeNumber` dan `switchHistory` menyimpan rantai pergantian beserta alasan, catatan, kondisi unit lama, dan timestamp. Riwayat terlihat di kartu Rental dan Audit Transaksi pada Keuangan, termasuk setelah pengembalian. Aktivitas Terbaru menampilkan switch tanpa menambah transaksi finansial. Pengembalian individu/kelompok memproses unit aktif terakhir.
+
+Unit dan transaksi disimpan bersama pada `bike-rent-pro:operations` (snapshot versi 1 dengan revision), sehingga switch tidak dapat tersimpan sebagian. Semua penulisan operasional membaca ulang snapshot di dalam Web Lock yang sama; perubahan disinkronkan antartab. Kunci `bike-rent-pro:bikes` dan `bike-rent-pro:transactions` lama tetap dipertahankan dan dibaca jika snapshot baru belum ada. Data lama tanpa histori dianggap belum pernah berganti unit. Backup versi 5 menyertakan histori dan tetap dapat mengimpor backup lama.
+
+Ganti Unit memerlukan Web Locks pada HTTPS/localhost dan ditolak dengan pesan jelas jika dukungan browser atau penyimpanan tidak tersedia. Koordinasi berlaku untuk tab pada origin/profil browser yang sama; aplikasi ini belum memiliki sinkronisasi antarperangkat atau server. Muat ulang tab versi lama setelah deployment. Tidak ada identitas staf terverifikasi karena aplikasi belum memiliki autentikasi. Penyesuaian tarif saat upgrade/downgrade belum tersedia; harga yang disepakati tetap dipertahankan.
+
 ## Fitur Utama
 
 - Filter harian sebagai default, filter cepat minggu/bulan/tahun, dan satu kalender rentang dinamis.
@@ -26,7 +36,7 @@ Data aplikasi disimpan otomatis di `localStorage` browser.
 - Harga modal dan harga tamu dinamis per tipe sepeda, termasuk tambah/hapus tipe yang aman.
 - Pengaturan identitas bisnis, lokasi etalase, penanggung jawab, awalan nomor unit, dan kode transaksi sewa.
 - Pemeriksaan kesehatan data untuk nomor duplikat, transaksi yatim, dan tarif bermargin negatif.
-- Backup JSON versi 4, impor data, dan pemulihan data demo lengkap dengan konfigurasi sistem.
+- Backup JSON versi 5 dengan histori pergantian unit, impor data lama, dan pemulihan data demo lengkap dengan konfigurasi sistem.
 - Pemisahan workflow: status sewa hanya diaktifkan melalui Rental agar unit dan transaksi selalu sinkron.
 - Sidebar desktop, navigasi bawah mobile, akses keyboard, notifikasi tindakan, dan dukungan reduced-motion.
 - Metadata SEO, Open Graph, JSON-LD, sitemap, robots, manifest, dan social preview.
