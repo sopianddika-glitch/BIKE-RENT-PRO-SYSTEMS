@@ -69,6 +69,8 @@ export const initialSystemSettings = {
   unitPrefix: 'S',
   unitDigits: 3,
   rentalCodePrefix: 'SW',
+  maxRentalDays: 30,
+  dueSoonHours: 2,
   lowAvailabilityThreshold: 2,
   defaultDashboardRange: 'hari',
   dashboardShowFinance: true,

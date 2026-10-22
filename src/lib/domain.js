@@ -1,4 +1,5 @@
 import { BIKE_STATUSES, initialSystemSettings } from '../data/seed.js';
+import { EXTENSION_RATE_FIELDS, isRentalClosed } from './rentalDuration.js';
 
 const dashboardRanges = ['hari', 'minggu', 'bulan', 'tahun'];
 
@@ -22,6 +23,7 @@ export const defaultRentalRate = { cost: 30000, price: 50000 };
 export const normalizeRentalRate = (rate = {}) => ({
   cost: Math.max(0, Number(rate.cost ?? defaultRentalRate.cost) || 0),
   price: Math.max(0, Number(rate.price ?? defaultRentalRate.price) || 0),
+  ...Object.fromEntries(EXTENSION_RATE_FIELDS.map((field) => [field, rate[field] !== '' && rate[field] != null && Number.isSafeInteger(Number(rate[field])) && Number(rate[field]) >= 0 ? Number(rate[field]) : null])),
 });
 
 export const normalizeBike = (bike = {}) => ({
@@ -32,11 +34,12 @@ export const normalizeBike = (bike = {}) => ({
 export const normalizeTransaction = (transaction = {}) => ({
   ...transaction,
   category: transaction.category || (transaction.bikeId || Number(transaction.costAmount || 0) > 0 ? 'rental' : 'manual'),
-  settled: Number(transaction.costAmount || 0) > 0 ? Boolean(transaction.settled) : null,
+  settled: Number(transaction.originalCostAmount ?? transaction.costAmount ?? 0) > 0 ? Boolean(transaction.settled) : null,
   returnedAt: transaction.returnedAt || null,
   rentalGroupId: transaction.rentalGroupId || null,
   rentalCode: transaction.rentalCode || null,
   switchHistory: Array.isArray(transaction.switchHistory) ? transaction.switchHistory : [],
+  extensionHistory: Array.isArray(transaction.extensionHistory) ? transaction.extensionHistory : [],
 });
 
 export const normalizeSystemSettings = (settings = {}) => {
@@ -50,6 +53,8 @@ export const normalizeSystemSettings = (settings = {}) => {
     unitPrefix: cleanCode(merged.unitPrefix, initialSystemSettings.unitPrefix),
     unitDigits: toSafeInteger(merged.unitDigits, initialSystemSettings.unitDigits, 2, 6),
     rentalCodePrefix: cleanCode(merged.rentalCodePrefix, initialSystemSettings.rentalCodePrefix),
+    maxRentalDays: Number.isSafeInteger(Number(merged.maxRentalDays)) && Number(merged.maxRentalDays) > 0 ? Number(merged.maxRentalDays) : initialSystemSettings.maxRentalDays,
+    dueSoonHours: Number.isFinite(Number(merged.dueSoonHours)) && Number(merged.dueSoonHours) >= 0 ? Number(merged.dueSoonHours) : initialSystemSettings.dueSoonHours,
     lowAvailabilityThreshold: toSafeInteger(merged.lowAvailabilityThreshold, initialSystemSettings.lowAvailabilityThreshold, 0, 999),
     defaultDashboardRange: dashboardRanges.includes(merged.defaultDashboardRange) ? merged.defaultDashboardRange : initialSystemSettings.defaultDashboardRange,
     dashboardShowFinance: Boolean(merged.dashboardShowFinance),
@@ -102,7 +107,7 @@ export const buildDashboardStats = (bikes, transactions) => {
     pengeluaranOperasional,
     pengeluaran,
     laba: pendapatan - pengeluaran,
-    totalTransactions: transactions.length,
+    totalTransactions: new Set(transactions.map((transaction) => transaction.sourceTransactionId ?? transaction.id)).size,
   };
 };
 
@@ -142,7 +147,7 @@ export const getActiveRentals = (bikes, transactions) => bikes
   .map((bike) => ({
     bike,
     transaction: [...transactions]
-      .filter((transaction) => Number(transaction.bikeId) === bike.id && transaction.category === 'rental' && !transaction.returnedAt)
+      .filter((transaction) => Number(transaction.bikeId) === bike.id && transaction.category === 'rental' && !isRentalClosed(transaction))
       .sort((first, second) => second.id - first.id)[0] || null,
   }));
 

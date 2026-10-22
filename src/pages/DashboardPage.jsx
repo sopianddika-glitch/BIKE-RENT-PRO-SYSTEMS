@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import EmptyState from '../components/EmptyState.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
+import RentalTimingInfo from '../components/RentalTimingInfo.jsx';
+import { getRentalTimeStatus } from '../lib/rentalDuration.js';
 import { formatCurrency, formatDate } from '../lib/formatters.js';
 
 const statusRows = [
@@ -49,7 +51,7 @@ function Metric({ icon: Icon, label, value, meta, tone }) {
   );
 }
 
-export default function DashboardPage({ stats, fleetOverview, systemSettings, dateFilter, recentTransactions, activeRentals, onNavigate, onStartRental, onReturnBike }) {
+export default function DashboardPage({ now, dueSoonHours, stats, fleetOverview, systemSettings, dateFilter, recentTransactions, activeRentals, onNavigate, onStartRental, onReturnBike }) {
   const [stockSearch, setStockSearch] = useState('');
   const totalBikes = fleetOverview.total;
   const stockWarning = stats.tersedia.length <= systemSettings.lowAvailabilityThreshold;
@@ -161,7 +163,7 @@ export default function DashboardPage({ stats, fleetOverview, systemSettings, da
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
             <div>
               <h2 className="text-sm font-black text-slate-950">Penyewaan Aktif</h2>
-              <p className="mt-1 text-xs font-semibold text-slate-500">Unit yang sedang berada di tamu</p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">Unit yang sedang berada di tamu</p><p className="mt-1 text-[10px] font-bold text-slate-600">{activeRentals.filter(({ transaction }) => getRentalTimeStatus(transaction, now, dueSoonHours).id === 'dueSoon').length} segera jatuh tempo / {activeRentals.filter(({ transaction }) => getRentalTimeStatus(transaction, now, dueSoonHours).id === 'overdue').length} terlambat</p>
             </div>
             <span className="rounded-md bg-cyan-50 px-2.5 py-1 text-xs font-black text-cyan-700">{activeRentals.length} aktif</span>
           </div>
@@ -173,7 +175,7 @@ export default function DashboardPage({ stats, fleetOverview, systemSettings, da
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-cyan-50 text-cyan-700"><Bike size={19} /></div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2"><p className="font-black text-slate-950">{bike.number}</p><StatusBadge status="disewa" /></div>
-                      <p className="mt-1 truncate text-xs font-semibold text-slate-500">{transaction?.customerName || bike.note || bike.type}</p>
+                      <p className="mt-1 truncate text-xs font-semibold text-slate-500">{transaction?.customerName || bike.note || bike.type}</p><RentalTimingInfo transaction={transaction} now={now} dueSoonHours={dueSoonHours} compact />
                     </div>
                   </div>
                   <button type="button" onClick={() => onReturnBike(bike.id)} className="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-100">

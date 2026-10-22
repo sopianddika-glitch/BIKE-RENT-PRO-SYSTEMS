@@ -1,3 +1,5 @@
+import { isRentalClosed } from './rentalDuration.js';
+
 export const SWITCH_REASONS = ['Kerusakan', 'Masalah Teknis', 'Permintaan Customer', 'Upgrade/Downgrade', 'Operasional', 'Lainnya'];
 
 export const OLD_UNIT_STATUSES = [
@@ -8,7 +10,7 @@ export const OLD_UNIT_STATUSES = [
 export const getReplacementBikes = (bikes, transactions, currentBikeId) => bikes.filter((bike) => (
   bike.id !== Number(currentBikeId)
   && bike.status === 'tersedia'
-  && !transactions.some((transaction) => transaction.category === 'rental' && !transaction.returnedAt && Number(transaction.bikeId) === bike.id)
+  && !transactions.some((transaction) => transaction.category === 'rental' && !isRentalClosed(transaction) && Number(transaction.bikeId) === bike.id)
 ));
 
 // Keep the financial transaction intact. Only its current unit and unit history change.
@@ -17,6 +19,7 @@ export const switchRentalUnit = (state, request, switchedAt = new Date().toISOSt
   const transaction = state.transactions.find((item) => item.id === Number(rentalId));
   if (!transaction || transaction.category !== 'rental') throw new Error('Rental tidak ditemukan.');
   if (transaction.returnedAt) throw new Error('Rental sudah selesai. Unit tidak dapat diganti.');
+  if (isRentalClosed(transaction)) throw new Error('Rental sudah dibatalkan atau ditutup. Unit tidak dapat diganti.');
   const history = Array.isArray(transaction.switchHistory) ? transaction.switchHistory : [];
   if (Number(transaction.bikeId) !== Number(currentBikeId) || history.length !== expectedSwitchCount) {
     throw new Error('Unit aktif rental sudah berubah. Tutup dialog dan buka kembali Ganti Unit.');

@@ -15,6 +15,7 @@ import {
   WalletCards,
   Workflow,
 } from 'lucide-react';
+import ExtensionRateSettings from '../components/ExtensionRateSettings.jsx';
 import { formatCurrency } from '../lib/formatters.js';
 
 const tabs = [
@@ -101,6 +102,7 @@ export default function SettingsPage({
             </div>
           </section>
 
+          <ExtensionRateSettings bikeTypes={bikeTypes} getRate={getRate} onRateChange={onRateChange} />
           <form onSubmit={addType} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-md bg-cyan-50 text-cyan-700"><Plus size={18} /></div><div><h2 className="text-sm font-black text-slate-950">Tambah Tipe & Tarif</h2><p className="mt-1 text-xs font-semibold text-slate-500">Siapkan tarif sebelum unit baru dimasukkan</p></div></div>
             <div className="mt-4 grid gap-3 md:grid-cols-[1fr_180px_180px_auto] md:items-end">
@@ -136,6 +138,14 @@ export default function SettingsPage({
             <div className="border-t border-slate-100 bg-slate-50 px-5 py-4"><p className="text-[10px] font-black uppercase tracking-wide text-slate-500">Pratinjau nomor unit berikutnya</p><p className="mt-1 text-2xl font-black text-cyan-700">{suggestedUnitNumber}</p></div>
           </section>
 
+          <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2">
+            <h2 className="text-sm font-black">Durasi & Pengembalian</h2>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div><label htmlFor="max-rental-days" className="mb-2 block text-xs font-black">Maksimum durasi rental (hari)</label><input id="max-rental-days" type="number" min="1" step="1" value={systemSettings.maxRentalDays} onChange={(event) => onSettingChange('maxRentalDays', event.target.value)} className="w-full rounded-md border border-slate-200 p-3 text-sm font-bold" /></div>
+              <div><label htmlFor="due-soon-hours" className="mb-2 block text-xs font-black">Peringatan jatuh tempo (jam)</label><input id="due-soon-hours" type="number" min="0" step="1" value={systemSettings.dueSoonHours} onChange={(event) => onSettingChange('dueSoonHours', event.target.value)} className="w-full rounded-md border border-slate-200 p-3 text-sm font-bold" /></div>
+            </div>
+            <p className="mt-3 text-xs font-semibold text-slate-500">Batas berlaku untuk total durasi sejak mulai, termasuk seluruh perpanjangan. Rental terlambat tetap aktif sampai unit dikembalikan.</p>
+          </section>
           <section className="rounded-lg border border-slate-800 bg-slate-950 p-5 text-white xl:col-span-2">
             <h2 className="text-sm font-black">Pemisahan workflow yang aman</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[
@@ -166,7 +176,7 @@ export default function SettingsPage({
 
       {activeView === 'data' ? (
         <div className="grid gap-5 lg:grid-cols-2">
-          <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm"><div className="flex h-11 w-11 items-center justify-center rounded-md bg-cyan-50 text-cyan-700"><Database size={21} /></div><h2 className="mt-4 text-base font-black text-slate-950">Backup Operasional Lengkap</h2><p className="mt-2 text-sm font-semibold leading-6 text-slate-500">Mencakup armada, transaksi, riwayat unit, tarif, serta seluruh pengaturan sistem.</p><div className="mt-4 grid grid-cols-2 border-y border-slate-100 py-4"><div><p className="text-2xl font-black text-slate-950">{bikes.length}</p><p className="mt-1 text-xs font-semibold text-slate-500">unit armada</p></div><div><p className="text-2xl font-black text-slate-950">{transactions.length}</p><p className="mt-1 text-xs font-semibold text-slate-500">transaksi</p></div></div><div className="mt-5 flex flex-col gap-2 sm:flex-row"><button type="button" onClick={onExport} className="inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-slate-950 px-4 py-3 text-xs font-black text-white"><Download size={16} /> Unduh Backup</button><label className="inline-flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-md bg-cyan-50 px-4 py-3 text-xs font-black text-cyan-700 ring-1 ring-cyan-200"><Upload size={16} /> Impor Backup<input type="file" accept="application/json,.json" onChange={onImport} className="sr-only" /></label></div></section>
+          <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm"><div className="flex h-11 w-11 items-center justify-center rounded-md bg-cyan-50 text-cyan-700"><Database size={21} /></div><h2 className="mt-4 text-base font-black text-slate-950">Backup Operasional Lengkap</h2><p className="mt-2 text-sm font-semibold leading-6 text-slate-500">Mencakup armada, transaksi, waktu rental, riwayat unit dan perpanjangan, tarif, serta pengaturan sistem.</p><div className="mt-4 grid grid-cols-2 border-y border-slate-100 py-4"><div><p className="text-2xl font-black text-slate-950">{bikes.length}</p><p className="mt-1 text-xs font-semibold text-slate-500">unit armada</p></div><div><p className="text-2xl font-black text-slate-950">{transactions.length}</p><p className="mt-1 text-xs font-semibold text-slate-500">transaksi</p></div></div><div className="mt-5 flex flex-col gap-2 sm:flex-row"><button type="button" onClick={onExport} className="inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-slate-950 px-4 py-3 text-xs font-black text-white"><Download size={16} /> Unduh Backup</button><label className="inline-flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-md bg-cyan-50 px-4 py-3 text-xs font-black text-cyan-700 ring-1 ring-cyan-200"><Upload size={16} /> Impor Backup<input type="file" accept="application/json,.json" onChange={onImport} className="sr-only" /></label></div></section>
 
           <section className={`rounded-lg border bg-white p-5 shadow-sm ${dataHealth.issueCount ? 'border-amber-200' : 'border-emerald-200'}`}><div className={`flex h-11 w-11 items-center justify-center rounded-md ${dataHealth.issueCount ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{dataHealth.issueCount ? <AlertTriangle size={21} /> : <ShieldCheck size={21} />}</div><h2 className="mt-4 text-base font-black text-slate-950">Kesehatan Data</h2><p className="mt-2 text-sm font-semibold leading-6 text-slate-500">{dataHealth.issueCount ? `${dataHealth.issueCount} hal perlu ditinjau sebelum data dibagikan.` : 'Struktur data utama konsisten dan siap digunakan.'}</p><div className="mt-4 divide-y divide-slate-100 border-y border-slate-100"><div className="flex justify-between py-3 text-xs font-bold text-slate-600"><span>Nomor unit duplikat</span><strong className="text-slate-950">{dataHealth.duplicateUnitNumbers}</strong></div><div className="flex justify-between py-3 text-xs font-bold text-slate-600"><span>Transaksi tanpa unit</span><strong className="text-slate-950">{dataHealth.orphanRentalTransactions}</strong></div><div className="flex justify-between py-3 text-xs font-bold text-slate-600"><span>Tarif bermargin negatif</span><strong className="text-slate-950">{dataHealth.negativeMarginTypes}</strong></div></div></section>
 

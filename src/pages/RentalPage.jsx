@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeftRight, ArrowRight, Bike, Plus, RefreshCw, Search, UsersRound, WalletCards } from 'lucide-react';
+import { ArrowLeftRight, ArrowRight, Bike, Clock3, Plus, RefreshCw, Search, UsersRound, WalletCards } from 'lucide-react';
 import EmptyState from '../components/EmptyState.jsx';
 import RentalDialog from '../components/RentalDialog.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
 import SwitchUnitDialog from '../components/SwitchUnitDialog.jsx';
 import UnitHistory from '../components/UnitHistory.jsx';
+import ExtendRentalDialog from '../components/ExtendRentalDialog.jsx';
+import ExtensionHistory from '../components/ExtensionHistory.jsx';
+import RentalTimingInfo from '../components/RentalTimingInfo.jsx';
 import { formatCurrency, formatDate } from '../lib/formatters.js';
 
 export default function RentalPage({
+  now,
+  settings,
+  onExtendRental,
   bikes,
   transactions,
   onSwitchUnit,
@@ -26,7 +32,10 @@ export default function RentalPage({
 }) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const closeDialog = useCallback(() => setIsDialogOpen(false), []);
+  const openRentalDialog = () => { onChange('refreshStart'); setIsDialogOpen(true); };
   const [switchTarget, setSwitchTarget] = useState(null);
+  const [extendTarget, setExtendTarget] = useState(null);
+  const closeExtendDialog = useCallback(() => setExtendTarget(null), []);
   const closeSwitchDialog = useCallback(() => setSwitchTarget(null), []);
 
   useEffect(() => {
@@ -71,7 +80,7 @@ export default function RentalPage({
             </div>
           </div>
           <div className="grid border-t border-white/10 sm:grid-cols-2 lg:w-[430px] lg:border-l lg:border-t-0">
-            <button type="button" onClick={() => setIsDialogOpen(true)} disabled={!availableBikes.length} className="flex items-center justify-between gap-4 border-b border-white/10 px-5 py-5 text-left transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50 sm:border-b-0 sm:border-r">
+            <button type="button" onClick={openRentalDialog} disabled={!availableBikes.length} className="flex items-center justify-between gap-4 border-b border-white/10 px-5 py-5 text-left transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50 sm:border-b-0 sm:border-r">
               <span><span className="block text-[10px] font-black uppercase tracking-wide text-emerald-300">Utama</span><span className="mt-1 block text-sm font-black">Buat Penyewaan</span></span><Plus size={19} />
             </button>
             <button type="button" onClick={() => onNavigate('fleet')} className="flex items-center justify-between gap-4 px-5 py-5 text-left transition hover:bg-white/5">
@@ -84,7 +93,7 @@ export default function RentalPage({
       <section>
         <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div><h2 className="text-base font-black text-slate-950">Pesanan Aktif</h2><p className="mt-1 text-xs font-semibold text-slate-600">{rentalGroups.length} pesanan / {activeRentals.length} unit</p></div>
-          <button type="button" onClick={() => setIsDialogOpen(true)} disabled={!availableBikes.length} className="inline-flex items-center justify-center gap-2 rounded-md bg-cyan-700 px-4 py-3 text-xs font-black text-white transition hover:bg-cyan-800 disabled:bg-slate-300"><Plus size={16} /> Penyewaan Baru</button>
+          <button type="button" onClick={openRentalDialog} disabled={!availableBikes.length} className="inline-flex items-center justify-center gap-2 rounded-md bg-cyan-700 px-4 py-3 text-xs font-black text-white transition hover:bg-cyan-800 disabled:bg-slate-300"><Plus size={16} /> Penyewaan Baru</button>
         </div>
 
         {rentalGroups.length > 0 ? (
@@ -112,11 +121,14 @@ export default function RentalPage({
                             <div className="min-w-0"><div className="flex items-center gap-2"><p className="font-black text-slate-950">{bike.number}</p><StatusBadge status="disewa" /></div><p className="mt-1 truncate text-xs font-semibold text-slate-600">{bike.type} / {formatCurrency(transaction?.amount || 0)}</p></div>
                           </div>
                           <div className="flex flex-wrap gap-2">
+                            {transaction ? <button type="button" aria-label={`Perpanjang Rental ${bike.number}`} onClick={() => setExtendTarget({ bike, transaction })} className="inline-flex items-center justify-center gap-2 rounded-md bg-cyan-50 px-3 py-3 text-xs font-black text-cyan-800 hover:bg-cyan-100"><Clock3 size={14} /> Perpanjang Rental</button> : null}
                             {transaction ? <button type="button" aria-label={`Ganti Unit ${bike.number}`} onClick={() => setSwitchTarget({ bike, transaction })} className="inline-flex items-center justify-center gap-2 rounded-md bg-cyan-50 px-3 py-3 text-xs font-black text-cyan-800 hover:bg-cyan-100"><ArrowLeftRight size={14} /> Ganti Unit</button> : null}
                             <button type="button" onClick={() => onReturnBike(bike.id)} className="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-50 px-3 py-3 text-xs font-black text-emerald-800 transition hover:bg-emerald-100"><RefreshCw size={14} /> Kembalikan</button>
                           </div>
                         </div>
+                        <RentalTimingInfo transaction={transaction} now={now} dueSoonHours={settings.dueSoonHours} />
                         <UnitHistory transaction={transaction} />
+                        <ExtensionHistory transaction={transaction} />
                       </div>
                     ))}
                   </div>
@@ -129,18 +141,19 @@ export default function RentalPage({
             })}
           </div>
         ) : (
-          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm"><EmptyState icon={UsersRound} title="Belum ada pesanan aktif" action={<button type="button" onClick={() => setIsDialogOpen(true)} className="inline-flex items-center gap-2 rounded-md bg-slate-950 px-4 py-2.5 text-xs font-black text-white"><Plus size={15} /> Penyewaan Baru</button>} /></div>
+          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm"><EmptyState icon={UsersRound} title="Belum ada pesanan aktif" action={<button type="button" onClick={openRentalDialog} className="inline-flex items-center gap-2 rounded-md bg-slate-950 px-4 py-2.5 text-xs font-black text-white"><Plus size={15} /> Penyewaan Baru</button>} /></div>
         )}
       </section>
 
       <section className="grid gap-4 sm:grid-cols-3">
         <button type="button" onClick={() => onNavigate('fleet')} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-cyan-300"><span><span className="text-[9px] font-black uppercase tracking-wide text-slate-600">Unit</span><span className="mt-1 block text-sm font-black text-slate-950">Cari dan ubah status</span></span><Search size={18} className="text-cyan-700" /></button>
         <button type="button" onClick={() => onNavigate('finance')} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-cyan-300"><span><span className="text-[9px] font-black uppercase tracking-wide text-slate-600">Keuangan</span><span className="mt-1 block text-sm font-black text-slate-950">Setoran dan audit</span></span><WalletCards size={18} className="text-cyan-700" /></button>
-        <button type="button" onClick={() => setIsDialogOpen(true)} disabled={!availableBikes.length} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-cyan-300 disabled:opacity-50"><span><span className="text-[9px] font-black uppercase tracking-wide text-slate-600">Cepat</span><span className="mt-1 block text-sm font-black text-slate-950">Tambah pesanan</span></span><Plus size={18} className="text-cyan-700" /></button>
+        <button type="button" onClick={openRentalDialog} disabled={!availableBikes.length} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-cyan-300 disabled:opacity-50"><span><span className="text-[9px] font-black uppercase tracking-wide text-slate-600">Cepat</span><span className="mt-1 block text-sm font-black text-slate-950">Tambah pesanan</span></span><Plus size={18} className="text-cyan-700" /></button>
       </section>
 
+      {extendTarget ? <ExtendRentalDialog target={extendTarget} settings={settings} getRate={getRate} now={now} onSubmit={onExtendRental} onClose={closeExtendDialog} /> : null}
       {switchTarget ? <SwitchUnitDialog target={switchTarget} bikes={bikes} transactions={transactions} onSubmit={onSwitchUnit} onClose={closeSwitchDialog} /> : null}
-      <RentalDialog open={isDialogOpen} availableBikes={availableBikes} form={form} error={error} getRate={getRate} onChange={onChange} onSubmit={onSubmit} onClose={closeDialog} />
+      <RentalDialog maxRentalDays={settings.maxRentalDays} open={isDialogOpen} availableBikes={availableBikes} form={form} error={error} getRate={getRate} onChange={onChange} onSubmit={onSubmit} onClose={closeDialog} />
     </div>
   );
 }

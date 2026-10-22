@@ -217,7 +217,7 @@ test('A → B then grouped return returns B and siblings while A stays in repair
   expect(state.transactions[0].switchHistory).toHaveLength(1);
 });
 
-test('backup v5 round-trip preserves switches and imports legacy backups safely', async ({ page }) => {
+test('backup v6 round-trip preserves switches and imports legacy backups safely', async ({ page }) => {
   await seedRental(page);
   const dialog = await openReview(page);
   await dialog.getByRole('button', { name: 'Konfirmasi Ganti Unit' }).click();
@@ -228,7 +228,7 @@ test('backup v5 round-trip preserves switches and imports legacy backups safely'
   const downloadEvent = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Unduh Backup' }).click();
   const backup = JSON.parse(await readFile(await (await downloadEvent).path(), 'utf8'));
-  expect(backup.schemaVersion).toBe(5);
+  expect(backup.schemaVersion).toBe(6);
   expect(backup.transactions).toEqual(switched.transactions);
   await page.locator('input[type="file"]').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });
   await expect(page.getByText('Backup berhasil diimpor dan diterapkan.', { exact: true })).toBeVisible();

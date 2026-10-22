@@ -28,7 +28,7 @@ export const readOperations = (strict = false) => {
   };
 };
 
-export const updateOperations = async (update, { requireLock = false } = {}) => {
+export const updateOperations = async (update, { requireLock = false, actionName = 'Ganti Unit' } = {}) => {
   const commit = () => {
     const current = readOperations(true);
     const next = update(current);
@@ -43,7 +43,7 @@ export const updateOperations = async (update, { requireLock = false } = {}) => 
     return { snapshot, result: next.result || { success: true } };
   };
   if (navigator.locks?.request) return navigator.locks.request(LOCK_NAME, commit);
-  if (requireLock) throw new Error('Ganti Unit memerlukan browser dengan penguncian data. Gunakan Chrome terbaru melalui HTTPS atau localhost.');
+  if (requireLock) throw new Error(`${actionName} memerlukan browser dengan penguncian data. Gunakan Chrome terbaru melalui HTTPS atau localhost.`);
   // Existing workflows still work in older browsers; switching fails closed without cross-tab locking.
   return commit();
 };
