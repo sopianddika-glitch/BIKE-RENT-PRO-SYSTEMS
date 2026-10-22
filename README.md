@@ -4,7 +4,7 @@ Konsol operasional responsif untuk mengelola armada, penyewaan, pengembalian, au
 
 ## Alur Operasional
 
-1. Pilih **Mulai Sewa** dari Pusat Operasi atau buka menu **Penyewaan**.
+1. Pilih **Mulai Sewa** dari Dashboard atau buka menu **Rental**.
 2. Pilih satu atau beberapa unit sekaligus dari popup penyewaan cepat.
 3. Isi identitas tamu satu kali; harga, modal, dan laba seluruh unit dihitung otomatis.
 4. Tinjau harga per unit lalu aktifkan penyewaan; semua status unit otomatis berubah menjadi **Disewa**.
@@ -16,7 +16,7 @@ Data aplikasi disimpan otomatis di `localStorage` browser.
 ## Fitur Utama
 
 - Filter harian sebagai default, filter cepat minggu/bulan/tahun, dan satu kalender rentang dinamis.
-- Pusat Operasi real-time dengan pintasan sewa, pengembalian, dan setoran.
+- Dashboard real-time dengan pintasan sewa, pengembalian, dan setoran.
 - Direktori stok real-time yang menampilkan seluruh nomor unit berdasarkan status, dilengkapi pencarian dan ringkasan per tipe.
 - Dashboard modular: periode bawaan, ambang peringatan stok, dan visibilitas setiap widget dapat diatur.
 - Popup penyewaan multi-unit dengan pencarian, pilih semua, satu data tamu, serta harga per unit.
@@ -27,7 +27,7 @@ Data aplikasi disimpan otomatis di `localStorage` browser.
 - Pengaturan identitas bisnis, lokasi etalase, penanggung jawab, awalan nomor unit, dan kode transaksi sewa.
 - Pemeriksaan kesehatan data untuk nomor duplikat, transaksi yatim, dan tarif bermargin negatif.
 - Backup JSON versi 4, impor data, dan pemulihan data demo lengkap dengan konfigurasi sistem.
-- Pemisahan workflow: status sewa hanya diaktifkan melalui Penyewaan agar unit dan transaksi selalu sinkron.
+- Pemisahan workflow: status sewa hanya diaktifkan melalui Rental agar unit dan transaksi selalu sinkron.
 - Sidebar desktop, navigasi bawah mobile, akses keyboard, notifikasi tindakan, dan dukungan reduced-motion.
 - Metadata SEO, Open Graph, JSON-LD, sitemap, robots, manifest, dan social preview.
 

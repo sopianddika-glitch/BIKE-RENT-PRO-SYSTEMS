@@ -130,7 +130,7 @@ export default function DashboardPage({ stats, fleetOverview, systemSettings, da
               <p className="mt-1 text-xs font-semibold text-slate-500">{totalBikes} unit / {fleetOverview.availabilityRate}% siap / {fleetOverview.utilizationRate}% disewa</p>
             </div>
             <button type="button" onClick={() => onNavigate('fleet')} className="inline-flex items-center gap-1.5 text-xs font-black text-cyan-700 hover:text-cyan-900">
-              Buka Armada <ArrowRight size={14} />
+              Buka Unit <ArrowRight size={14} />
             </button>
           </div>
           <div className="divide-y divide-slate-100">

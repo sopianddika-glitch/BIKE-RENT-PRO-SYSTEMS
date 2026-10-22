@@ -8,12 +8,12 @@ test.beforeEach(async ({ page }) => {
 
 test('penyewaan multi-unit, setoran, dan pengembalian kelompok terhubung', async ({ page }) => {
   test.setTimeout(60000);
-  await expect(page).toHaveTitle(/Pusat Operasi \| Bike Rent Pro Systems/);
+  await expect(page).toHaveTitle(/Dashboard \| Bike Rent Pro Systems/);
   await expect(page.getByText('Operasi Hari Ini')).toBeVisible();
   await expect(page.getByText('Unit Baru', { exact: true })).toHaveCount(0);
 
   await page.getByRole('button', { name: /Mulai Sewa/ }).click();
-  await expect(page.getByRole('heading', { name: 'Penyewaan', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Rental', exact: true })).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Penyewaan Baru' })).toBeVisible();
   await page.getByRole('button', { name: 'Pilih S-001 / Mountain Bike' }).click();
   await page.getByRole('button', { name: 'Pilih S-004 / City Bike' }).click();
@@ -40,14 +40,14 @@ test('penyewaan multi-unit, setoran, dan pengembalian kelompok terhubung', async
   await page.getByRole('button', { name: 'Tandai Disetor' }).first().click();
   await expect(page.getByText('Setoran rental ditandai selesai.')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Penyewaan' }).click();
+  await page.getByRole('button', { name: 'Rental', exact: true }).click();
   await page.getByRole('article').filter({ hasText: 'Tamu Pengujian' }).getByRole('button', { name: 'Kembalikan Semua' }).click();
   await expect(page.getByText('2 unit selesai disewa dan kembali tersedia.')).toBeVisible();
   await expect(page.getByRole('article').filter({ hasText: 'Tamu Pengujian' })).toHaveCount(0);
 });
 
 test('armada baru dan harga dinamis terhubung ke penyewaan', async ({ page }) => {
-  await page.getByRole('button', { name: 'Armada', exact: true }).click();
+  await page.getByRole('button', { name: 'Unit', exact: true }).click();
   await page.getByRole('button', { name: 'Tambah Unit' }).click();
   await page.getByLabel('Nomor Unit').fill('S-008');
   await page.getByLabel('Tipe Sepeda').fill('Hybrid Bike');
@@ -63,7 +63,7 @@ test('armada baru dan harga dinamis terhubung ke penyewaan', async ({ page }) =>
   await page.getByLabel('Modal Hybrid Bike').fill('32000');
   await expect(page.getByRole('row').filter({ hasText: 'Hybrid Bike' })).toContainText('Rp 18.000');
 
-  await page.getByRole('button', { name: 'Penyewaan' }).click();
+  await page.getByRole('button', { name: 'Rental', exact: true }).click();
   await page.getByRole('button', { name: 'Buat Penyewaan' }).click();
   await page.getByRole('button', { name: 'Pilih S-008 / Hybrid Bike' }).click();
   await page.getByRole('button', { name: 'Lanjut ke Pelanggan' }).click();
@@ -84,7 +84,7 @@ test('pengaturan workflow mengendalikan penomoran dan dashboard secara dinamis',
   await page.getByLabel('Kode sewa').fill('RNT');
   await expect(page.getByText('BR-0001', { exact: true })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Armada', exact: true }).click();
+  await page.getByRole('button', { name: 'Unit', exact: true }).click();
   await page.getByRole('button', { name: 'Tambah Unit' }).click();
   await expect(page.getByLabel('Nomor Unit')).toHaveValue('BR-0001');
   await page.getByLabel('Tipe Sepeda').fill('Beach Cruiser');
@@ -97,7 +97,7 @@ test('pengaturan workflow mengendalikan penomoran dan dashboard secara dinamis',
   await page.getByRole('switch', { name: 'Aktivitas terbaru' }).click();
   await expect(page.getByRole('switch', { name: 'Aktivitas terbaru' })).toHaveAttribute('aria-checked', 'false');
 
-  await page.getByRole('button', { name: 'Ringkasan' }).click();
+  await page.getByRole('button', { name: 'Dashboard' }).click();
   await expect(page.getByRole('heading', { name: 'Direktori Nomor Unit' })).toBeVisible();
   await expect(page.getByRole('button', { name: /BR-0001/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Bulan', exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -110,7 +110,7 @@ test('pengaturan workflow mengendalikan penomoran dan dashboard secara dinamis',
   await expect(page.getByRole('button', { name: /BR-0001/ })).toBeVisible();
 });
 
-test('metadata dan layout mobile siap dipublikasikan', async ({ page }, testInfo) => {
+test('metadata, navigasi, dan layout responsif tetap konsisten', async ({ page }, testInfo) => {
   await expect(page.locator('html')).toHaveAttribute('lang', 'id');
   await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /armada/i);
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
@@ -119,15 +119,32 @@ test('metadata dan layout mobile siap dipublikasikan', async ({ page }, testInfo
   );
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', /site\.webmanifest$/);
 
-  if (testInfo.project.name === 'mobile-chrome') {
-    await expect(page.getByRole('navigation', { name: 'Navigasi utama mobile' })).toBeVisible();
+  const navigation = page.getByRole('navigation', {
+    name: testInfo.project.name === 'mobile-chrome' ? 'Navigasi utama mobile' : 'Navigasi utama',
+    exact: true,
+  });
+  const pages = [
+    ['Dashboard', 'dashboard'],
+    ['Rental', 'rental'],
+    ['Unit', 'fleet'],
+    ['Keuangan', 'finance'],
+    ['Pengaturan', 'settings'],
+  ];
+  await expect(navigation).toBeVisible();
+  await expect(navigation.getByRole('button')).toHaveText(pages.map(([label]) => label));
 
-    for (const pageName of ['Ringkasan', 'Penyewaan', 'Armada', 'Keuangan', 'Pengaturan']) {
-      await page.getByRole('navigation', { name: 'Navigasi utama mobile' }).getByRole('button', { name: pageName }).click();
-      const hasHorizontalOverflow = await page.evaluate(
-        () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
-      );
-      expect(hasHorizontalOverflow, `${pageName} tidak boleh memiliki overflow horizontal`).toBe(false);
-    }
+  for (const [pageName, route] of pages) {
+    const menuItem = navigation.getByRole('button', { name: pageName, exact: true });
+    await menuItem.click();
+    await expect(page).toHaveURL(new RegExp(`#${route}$`));
+    await expect(menuItem).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('heading', { level: 1, name: pageName, exact: true })).toBeVisible();
+    await expect(page).toHaveTitle(`${pageName} | Bike Rent Pro Systems`);
+    await page.reload();
+    await expect(page.getByRole('heading', { level: 1, name: pageName, exact: true })).toBeVisible();
+    const hasHorizontalOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(hasHorizontalOverflow, `${pageName} tidak boleh memiliki overflow horizontal`).toBe(false);
   }
 });

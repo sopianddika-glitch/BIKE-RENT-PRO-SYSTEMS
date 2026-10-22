@@ -31,11 +31,11 @@ const STORAGE_KEYS = {
 };
 
 const pageMeta = {
-  dashboard: { title: 'Pusat Operasi', subtitle: 'Ringkasan armada, arus kas, dan pekerjaan hari ini', description: 'Pantau armada, transaksi, laba, dan setoran rental sepeda dari satu pusat operasi.' },
-  rental: { title: 'Penyewaan', subtitle: 'Aktifkan sewa baru dan proses pengembalian unit', description: 'Kelola penyewaan dan pengembalian unit sepeda dengan alur operasional yang jelas.' },
-  fleet: { title: 'Armada', subtitle: 'Katalog unit, harga, kondisi, dan status operasional', description: 'Kelola katalog, kondisi, harga, dan status armada sepeda.' },
+  dashboard: { title: 'Dashboard', subtitle: 'Ringkasan armada, arus kas, dan pekerjaan hari ini', description: 'Pantau armada, transaksi, laba, dan setoran rental sepeda dari satu pusat operasi.' },
+  rental: { title: 'Rental', subtitle: 'Aktifkan sewa baru dan proses pengembalian unit', description: 'Kelola penyewaan dan pengembalian unit sepeda dengan alur operasional yang jelas.' },
+  fleet: { title: 'Unit', subtitle: 'Katalog unit, harga, kondisi, dan status operasional', description: 'Kelola katalog, kondisi, harga, dan status armada sepeda.' },
   finance: { title: 'Keuangan', subtitle: 'Audit transaksi, laba, biaya, dan penyelesaian setoran', description: 'Audit pendapatan, pengeluaran, laba, serta status setoran rental.' },
-  settings: { title: 'Pengaturan Sistem', subtitle: 'Bisnis, workflow, harga, dashboard, dan keamanan data', description: 'Atur workflow, penomoran, harga, tampilan dashboard, dan backup data operasional.' },
+  settings: { title: 'Pengaturan', subtitle: 'Bisnis, workflow, harga, dashboard, dan keamanan data', description: 'Atur workflow, penomoran, harga, tampilan dashboard, dan backup data operasional.' },
 };
 
 const getTodayInput = () => {
@@ -286,7 +286,7 @@ export default function App() {
     const existingBike = bikes.find((bike) => bike.id === editingId);
     if (!number || !type) return { error: 'Nomor unit dan tipe sepeda wajib diisi.' };
     if (duplicate) return { error: 'Nomor unit sudah terdaftar.' };
-    if (form.status === 'disewa' && existingBike?.status !== 'disewa') return { error: 'Aktifkan status disewa melalui menu Penyewaan agar data tamu dan transaksi tetap sinkron.' };
+    if (form.status === 'disewa' && existingBike?.status !== 'disewa') return { error: 'Aktifkan status disewa melalui menu Rental agar data tamu dan transaksi tetap sinkron.' };
     if (editingId) {
       setBikes((current) => current.map((bike) => bike.id === editingId ? { ...bike, ...form, number, type, note: form.note.trim() } : bike));
       showNotice(`Unit ${number} berhasil diperbarui.`);
@@ -310,7 +310,7 @@ export default function App() {
     const bike = bikes.find((item) => item.id === bikeId);
     if (!bike) return false;
     if (status === 'disewa' && bike.status !== 'disewa') {
-      showNotice('Gunakan menu Penyewaan untuk mengaktifkan unit agar transaksi tetap sinkron.', 'error');
+      showNotice('Gunakan menu Rental untuk mengaktifkan unit agar transaksi tetap sinkron.', 'error');
       return false;
     }
     setBikes((current) => current.map((item) => (item.id === bikeId ? { ...item, status } : item)));

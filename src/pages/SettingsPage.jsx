@@ -87,7 +87,7 @@ export default function SettingsPage({
       {activeView === 'pricing' ? (
         <div className="space-y-5">
           <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-            <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-base font-black text-slate-950">Harga Dinamis per Tipe</h2><p className="mt-1 text-xs font-semibold text-slate-500">Satu sumber tarif untuk Armada, Penyewaan, dan analisis laba</p></div><span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-emerald-700"><CheckCircle2 size={14} /> Tersimpan Otomatis</span></div>
+            <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-base font-black text-slate-950">Harga Dinamis per Tipe</h2><p className="mt-1 text-xs font-semibold text-slate-500">Satu sumber tarif untuk Unit, Rental, dan analisis laba</p></div><span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-emerald-700"><CheckCircle2 size={14} /> Tersimpan Otomatis</span></div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[850px] border-collapse text-left">
                 <thead><tr className="border-b border-slate-200 bg-slate-50"><th className="px-5 py-3 text-[10px] font-black uppercase tracking-wide text-slate-500">Tipe Sepeda</th><th className="px-5 py-3 text-[10px] font-black uppercase tracking-wide text-slate-500">Unit</th><th className="px-5 py-3 text-[10px] font-black uppercase tracking-wide text-slate-500">Modal</th><th className="px-5 py-3 text-[10px] font-black uppercase tracking-wide text-slate-500">Harga Tamu</th><th className="px-5 py-3 text-[10px] font-black uppercase tracking-wide text-slate-500">Laba</th><th className="px-5 py-3 text-right text-[10px] font-black uppercase tracking-wide text-slate-500">Aksi</th></tr></thead>
@@ -140,8 +140,8 @@ export default function SettingsPage({
             <h2 className="text-sm font-black">Pemisahan workflow yang aman</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[
               ['Pengaturan', 'Atur identitas, kode, tarif, dan tampilan.'],
-              ['Armada', 'Kelola unit, kondisi, dan status non-sewa.'],
-              ['Penyewaan', 'Aktifkan sewa dan kembalikan unit.'],
+              ['Unit', 'Kelola unit, kondisi, dan status non-sewa.'],
+              ['Rental', 'Aktifkan sewa dan kembalikan unit.'],
               ['Keuangan', 'Audit arus kas dan selesaikan setoran.'],
             ].map(([title, description]) => <div key={title} className="rounded-md border border-white/10 bg-white/5 p-4"><p className="text-xs font-black text-cyan-300">{title}</p><p className="mt-2 text-xs font-semibold leading-5 text-slate-300">{description}</p></div>)}</div>
           </section>
@@ -158,7 +158,7 @@ export default function SettingsPage({
             </div>
           </section>
           <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-100 px-5 py-4"><h2 className="text-base font-black text-slate-950">Widget yang Ditampilkan</h2><p className="mt-1 text-xs font-semibold text-slate-500">Perubahan langsung diterapkan pada Pusat Operasi</p></div>
+            <div className="border-b border-slate-100 px-5 py-4"><h2 className="text-base font-black text-slate-950">Widget yang Ditampilkan</h2><p className="mt-1 text-xs font-semibold text-slate-500">Perubahan langsung diterapkan pada Dashboard</p></div>
             {dashboardOptions.map((option) => <Toggle key={option.field} checked={systemSettings[option.field]} label={option.label} description={option.description} onChange={(checked) => onSettingChange(option.field, checked)} />)}
           </section>
         </div>

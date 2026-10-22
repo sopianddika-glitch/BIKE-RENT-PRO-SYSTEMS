@@ -9,9 +9,9 @@ import {
 } from 'lucide-react';
 
 const navigationItems = [
-  { id: 'dashboard', label: 'Ringkasan', icon: LayoutDashboard },
-  { id: 'rental', label: 'Penyewaan', icon: ReceiptText },
-  { id: 'fleet', label: 'Armada', icon: Boxes },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'rental', label: 'Rental', icon: ReceiptText },
+  { id: 'fleet', label: 'Unit', icon: Boxes },
   { id: 'finance', label: 'Keuangan', icon: WalletCards },
   { id: 'settings', label: 'Pengaturan', icon: Settings },
 ];

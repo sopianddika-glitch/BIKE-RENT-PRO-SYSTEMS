@@ -68,7 +68,7 @@ export default function RentalPage({
               <span><span className="block text-[10px] font-black uppercase tracking-wide text-emerald-300">Utama</span><span className="mt-1 block text-sm font-black">Buat Penyewaan</span></span><Plus size={19} />
             </button>
             <button type="button" onClick={() => onNavigate('fleet')} className="flex items-center justify-between gap-4 px-5 py-5 text-left transition hover:bg-white/5">
-              <span><span className="block text-[10px] font-black uppercase tracking-wide text-cyan-300">Katalog</span><span className="mt-1 block text-sm font-black">Buka Armada</span></span><ArrowRight size={19} />
+              <span><span className="block text-[10px] font-black uppercase tracking-wide text-cyan-300">Katalog</span><span className="mt-1 block text-sm font-black">Buka Unit</span></span><ArrowRight size={19} />
             </button>
           </div>
         </div>
@@ -121,7 +121,7 @@ export default function RentalPage({
       </section>
 
       <section className="grid gap-4 sm:grid-cols-3">
-        <button type="button" onClick={() => onNavigate('fleet')} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-cyan-300"><span><span className="text-[9px] font-black uppercase tracking-wide text-slate-600">Armada</span><span className="mt-1 block text-sm font-black text-slate-950">Cari dan ubah status</span></span><Search size={18} className="text-cyan-700" /></button>
+        <button type="button" onClick={() => onNavigate('fleet')} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-cyan-300"><span><span className="text-[9px] font-black uppercase tracking-wide text-slate-600">Unit</span><span className="mt-1 block text-sm font-black text-slate-950">Cari dan ubah status</span></span><Search size={18} className="text-cyan-700" /></button>
         <button type="button" onClick={() => onNavigate('finance')} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-cyan-300"><span><span className="text-[9px] font-black uppercase tracking-wide text-slate-600">Keuangan</span><span className="mt-1 block text-sm font-black text-slate-950">Setoran dan audit</span></span><WalletCards size={18} className="text-cyan-700" /></button>
         <button type="button" onClick={() => setIsDialogOpen(true)} disabled={!availableBikes.length} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-cyan-300 disabled:opacity-50"><span><span className="text-[9px] font-black uppercase tracking-wide text-slate-600">Cepat</span><span className="mt-1 block text-sm font-black text-slate-950">Tambah pesanan</span></span><Plus size={18} className="text-cyan-700" /></button>
       </section>
