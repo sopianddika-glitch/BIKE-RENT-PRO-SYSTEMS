@@ -36,14 +36,14 @@ function Metric({ icon: Icon, label, value, meta, tone }) {
   };
 
   return (
-    <div className="border-b border-slate-200 bg-white px-5 py-5 sm:border-b-0 sm:border-r last:border-0">
+    <div className="min-w-0 bg-white p-3 sm:p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">{label}</p>
-          <p className="mt-2 truncate text-2xl font-black text-slate-950">{value}</p>
-          <p className="mt-1 text-xs font-semibold text-slate-500">{meta}</p>
+          <p className="text-[11px] font-extrabold leading-4 text-slate-600">{label}</p>
+          <p className="mt-1 [overflow-wrap:anywhere] text-xl font-black leading-tight text-slate-950 sm:text-2xl">{value}</p>
+          <p className="mt-1 text-xs font-medium leading-4 text-slate-600">{meta}</p>
         </div>
-        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md ${tones[tone]}`}>
+        <div aria-hidden="true" className={`hidden h-9 w-9 shrink-0 items-center justify-center rounded-md sm:flex ${tones[tone]}`}>
           <Icon size={19} />
         </div>
       </div>
@@ -54,7 +54,7 @@ function Metric({ icon: Icon, label, value, meta, tone }) {
 export default function DashboardPage({ now, dueSoonHours, stats, fleetOverview, systemSettings, dateFilter, recentTransactions, activeRentals, onNavigate, onStartRental, onReturnBike }) {
   const [stockSearch, setStockSearch] = useState('');
   const totalBikes = fleetOverview.total;
-  const stockWarning = stats.tersedia.length <= systemSettings.lowAvailabilityThreshold;
+  const stockWarning = stats.readyCount <= systemSettings.lowAvailabilityThreshold;
   const visibleStock = useMemo(() => {
     const query = stockSearch.trim().toLowerCase();
     return statusRows.map((status) => ({
@@ -64,50 +64,40 @@ export default function DashboardPage({ now, dueSoonHours, stats, fleetOverview,
   }, [fleetOverview, stockSearch]);
 
   return (
-    <div className="space-y-5">
-      <section className="overflow-hidden rounded-lg border border-slate-800 bg-slate-950 text-white shadow-xl shadow-slate-950/10">
-        <div className="grid lg:grid-cols-[1fr_auto]">
-          <div className="p-5 sm:p-6">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">Operasi Hari Ini</p>
-              {stockWarning ? <span className="rounded bg-amber-400/15 px-2 py-1 text-[9px] font-black uppercase tracking-wide text-amber-200">Stok siap sewa menipis</span> : <span className="rounded bg-emerald-400/15 px-2 py-1 text-[9px] font-black uppercase tracking-wide text-emerald-200">Ketersediaan aman</span>}
+    <div className="space-y-4">
+      <section aria-labelledby="daily-operations" className="overflow-hidden rounded-lg border border-slate-800 bg-slate-950 text-white shadow-lg shadow-slate-950/10">
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,42%)]">
+          <div className="min-w-0 p-3 sm:px-4">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <h2 id="daily-operations" className="text-sm font-black leading-5 text-white">Operasi Hari Ini</h2>
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold leading-4 ${stockWarning ? 'bg-amber-400/15 text-amber-200' : 'bg-emerald-400/15 text-emerald-200'}`}>
+                {stockWarning ? 'Stok siap sewa menipis' : 'Ketersediaan aman'}
+              </span>
             </div>
-            <div className="mt-3 flex flex-wrap items-end gap-x-7 gap-y-3">
-              <div>
-                <p className="text-4xl font-black">{stats.tersedia.length}</p>
-                <p className="mt-1 text-xs font-bold text-slate-400">unit siap disewa</p>
+            <dl className="mt-2.5 grid grid-cols-[minmax(0,0.85fr)_minmax(0,0.9fr)_minmax(0,1.25fr)] gap-2 sm:gap-3">
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <dt className="text-[11px] font-semibold leading-4 text-slate-300 sm:text-xs">unit siap disewa</dt>
+                <dd className="order-first text-xl font-black tabular-nums leading-tight sm:text-2xl">{stats.readyCount}</dd>
               </div>
-              <div>
-                <p className="text-4xl font-black">{stats.disewa.length}</p>
-                <p className="mt-1 text-xs font-bold text-slate-400">sewa sedang aktif</p>
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <dt className="text-[11px] font-semibold leading-4 text-slate-300 sm:text-xs">sewa sedang aktif</dt>
+                <dd className="order-first text-xl font-black tabular-nums leading-tight sm:text-2xl">{stats.disewa.length}</dd>
               </div>
-              <div>
-                <p className="text-4xl font-black text-rose-300">{formatCurrency(stats.setoranBelumDisetor)}</p>
-                <p className="mt-1 text-xs font-bold text-slate-400">setoran belum selesai</p>
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <dt className="text-[11px] font-semibold leading-4 text-slate-300 sm:text-xs">setoran belum selesai</dt>
+                <dd className="order-first [overflow-wrap:anywhere] text-xl font-black tabular-nums leading-tight text-rose-300 sm:text-2xl">{formatCurrency(stats.setoranBelumDisetor)}</dd>
               </div>
-            </div>
+            </dl>
           </div>
-          <div className="grid grid-cols-1 border-t border-white/10 sm:grid-cols-3 lg:w-[510px] lg:border-l lg:border-t-0">
-            <button type="button" onClick={onStartRental} className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-4 text-left transition hover:bg-white/5 sm:border-b-0 sm:border-r">
-              <span>
-                <span className="block text-[10px] font-black uppercase tracking-wide text-cyan-300">Utama</span>
-                <span className="mt-1 block text-sm font-black">Mulai Sewa</span>
-              </span>
-              <ArrowRight size={18} />
+          <div className="grid grid-cols-3 items-stretch gap-1.5 border-t border-white/10 bg-white/[0.03] p-2 sm:gap-2 lg:items-center lg:border-l lg:border-t-0 lg:p-3">
+            <button type="button" onClick={onStartRental} className="flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-md bg-cyan-300 px-0.5 py-1 text-center text-[11px] font-extrabold leading-4 text-slate-950 transition hover:bg-cyan-200 sm:flex-row sm:gap-2 sm:px-2 sm:text-xs">
+              <ArrowRight size={15} aria-hidden="true" className="shrink-0" /> Mulai Sewa
             </button>
-            <button type="button" onClick={() => onNavigate('rental')} className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-4 text-left transition hover:bg-white/5 sm:border-b-0 sm:border-r">
-              <span>
-                <span className="block text-[10px] font-black uppercase tracking-wide text-emerald-300">Aktif</span>
-                <span className="mt-1 block text-sm font-black">Pengembalian</span>
-              </span>
-              <RefreshCw size={18} />
+            <button type="button" onClick={() => onNavigate('rental')} className="flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-md border border-white/15 px-0.5 py-1 text-center text-[11px] font-extrabold leading-4 transition hover:bg-white/10 sm:flex-row sm:gap-2 sm:px-2 sm:text-xs">
+              <RefreshCw size={15} aria-hidden="true" className="shrink-0 text-emerald-300" /> Pengembalian
             </button>
-            <button type="button" onClick={() => onNavigate('finance')} className="flex items-center justify-between gap-3 px-4 py-4 text-left transition hover:bg-white/5">
-              <span>
-                <span className="block text-[10px] font-black uppercase tracking-wide text-rose-300">Audit</span>
-                <span className="mt-1 block text-sm font-black">Kelola Setoran</span>
-              </span>
-              <WalletCards size={18} />
+            <button type="button" onClick={() => onNavigate('finance')} className="flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-md border border-white/15 px-0.5 py-1 text-center text-[11px] font-extrabold leading-4 transition hover:bg-white/10 sm:flex-row sm:gap-2 sm:px-2 sm:text-xs">
+              <WalletCards size={15} aria-hidden="true" className="shrink-0 text-rose-300" /> Kelola Setoran
             </button>
           </div>
         </div>
@@ -116,17 +106,17 @@ export default function DashboardPage({ now, dueSoonHours, stats, fleetOverview,
       {dateFilter}
 
       {systemSettings.dashboardShowFinance ? <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div className="grid sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-2 gap-px bg-slate-200 lg:grid-cols-3">
           <Metric icon={TrendingUp} label="Pendapatan / Charges" value={formatCurrency(stats.pendapatan)} meta={`${stats.totalTransactions} transaksi`} tone="emerald" />
           <Metric icon={TrendingUp} label="Pembayaran Diterima" value={formatCurrency(stats.paymentsReceived)} meta="uang diterima pada periode" tone="emerald" />
-          <Metric icon={WalletCards} label="Piutang Tercatat" value={formatCurrency(stats.balanceDue)} meta={`saldo s.d. ${stats.balanceThrough}`} tone="cyan" />
+          <Metric icon={WalletCards} label="Piutang Tercatat" value={formatCurrency(stats.balanceDue)} meta={<>saldo s.d. <time dateTime={stats.balanceThrough} className="whitespace-nowrap">{formatDate(stats.balanceThrough)}</time></>} tone="cyan" />
           <Metric icon={WalletCards} label="Setoran Rental" value={formatCurrency(stats.setoranBelumDisetor)} meta={`${stats.transaksiBelumDisetor} belum disetor`} tone="cyan" />
           <Metric icon={TrendingDown} label="Biaya Operasional" value={formatCurrency(stats.pengeluaranOperasional)} meta="di luar modal rental" tone="rose" />
           <Metric icon={CircleDollarSign} label="Laba Akrual" value={formatCurrency(stats.laba)} meta="tagihan dikurangi seluruh biaya" tone="slate" />
         </div>
       </section> : null}
 
-      {systemSettings.dashboardShowFleet || systemSettings.dashboardShowActiveRentals ? <div className={`grid gap-5 ${systemSettings.dashboardShowFleet && systemSettings.dashboardShowActiveRentals ? 'xl:grid-cols-[0.9fr_1.1fr]' : ''}`}>
+      {systemSettings.dashboardShowFleet || systemSettings.dashboardShowActiveRentals ? <div className={`grid min-w-0 grid-cols-1 gap-5 ${systemSettings.dashboardShowFleet && systemSettings.dashboardShowActiveRentals ? 'xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]' : ''}`}>
         {systemSettings.dashboardShowFleet ? <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
             <div>
@@ -148,7 +138,7 @@ export default function DashboardPage({ now, dueSoonHours, stats, fleetOverview,
                   <div>
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs font-black text-slate-800">{label}</p>
-                      <p className="text-[10px] font-bold text-slate-600">{percentage}%</p>
+                      <p className="text-[11px] font-bold text-slate-600">{percentage}%</p>
                     </div>
                     <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
                       <div className={`h-full rounded-full ${color}`} style={{ width: `${percentage}%` }} />
@@ -165,7 +155,7 @@ export default function DashboardPage({ now, dueSoonHours, stats, fleetOverview,
           <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
             <div>
               <h2 className="text-sm font-black text-slate-950">Penyewaan Aktif</h2>
-              <p className="mt-1 text-xs font-semibold text-slate-500">Unit yang sedang berada di tamu</p><p className="mt-1 text-[10px] font-bold text-slate-600">{activeRentals.filter(({ transaction }) => getRentalTimeStatus(transaction, now, dueSoonHours).id === 'dueSoon').length} segera jatuh tempo / {activeRentals.filter(({ transaction }) => getRentalTimeStatus(transaction, now, dueSoonHours).id === 'overdue').length} terlambat</p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">Unit yang sedang berada di tamu</p><p className="mt-1 text-[11px] font-bold text-slate-600">{activeRentals.filter(({ transaction }) => getRentalTimeStatus(transaction, now, dueSoonHours).id === 'dueSoon').length} segera jatuh tempo / {activeRentals.filter(({ transaction }) => getRentalTimeStatus(transaction, now, dueSoonHours).id === 'overdue').length} terlambat</p>
             </div>
             <span className="rounded-md bg-cyan-50 px-2.5 py-1 text-xs font-black text-cyan-700">{activeRentals.length} aktif</span>
           </div>
@@ -176,8 +166,8 @@ export default function DashboardPage({ now, dueSoonHours, stats, fleetOverview,
                   <div className="flex min-w-0 items-center gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-cyan-50 text-cyan-700"><Bike size={19} /></div>
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2"><p className="font-black text-slate-950">{bike.number}</p><StatusBadge status="disewa" /></div>
-                      <p className="mt-1 truncate text-xs font-semibold text-slate-500">{transaction?.customerName || bike.note || bike.type}</p><RentalTimingInfo transaction={transaction} now={now} dueSoonHours={dueSoonHours} compact />
+                      <div className="flex flex-wrap items-center gap-2"><p className="min-w-0 [overflow-wrap:anywhere] font-black text-slate-950">{bike.number}</p><StatusBadge status="disewa" /></div>
+                      <p className="mt-1 [overflow-wrap:anywhere] text-xs font-semibold text-slate-500">{transaction?.customerName || bike.note || bike.type}</p><RentalTimingInfo transaction={transaction} now={now} dueSoonHours={dueSoonHours} compact />
                     </div>
                   </div>
                   <button type="button" onClick={() => onReturnBike(bike.id)} className="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-100">
@@ -199,7 +189,7 @@ export default function DashboardPage({ now, dueSoonHours, stats, fleetOverview,
             <p className="mt-1 text-xs font-semibold text-slate-500">Semua nomor sepeda di stok, dikelompokkan menurut status real-time</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <span className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-slate-700"><Gauge size={14} /> Utilisasi {fleetOverview.utilizationRate}%</span>
+            <span className="inline-flex items-center gap-2 rounded-md bg-slate-100 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-slate-700"><Gauge size={14} /> Utilisasi {fleetOverview.utilizationRate}%</span>
             <div className="relative">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input type="search" value={stockSearch} onChange={(event) => setStockSearch(event.target.value)} aria-label="Cari nomor unit di dashboard" placeholder="Cari nomor atau tipe" className="w-full rounded-md border border-slate-200 py-2.5 pl-9 pr-3 text-xs font-bold outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100 sm:w-56" />
@@ -211,16 +201,16 @@ export default function DashboardPage({ now, dueSoonHours, stats, fleetOverview,
             <div key={key} className="min-w-0 bg-white p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className={`flex items-center gap-2 text-xs font-black ${text}`}><Icon size={15} /> {label}</div>
-                <span className="rounded bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">{bikes.length}</span>
+                <span className="rounded bg-slate-100 px-2 py-1 text-[11px] font-black text-slate-600">{bikes.length}</span>
               </div>
               {bikes.length ? <div className="mt-3 flex flex-wrap gap-2">
-                {bikes.map((bike) => <button key={bike.id} type="button" onClick={() => onNavigate('fleet')} title={`${bike.number} / ${bike.type}${bike.note ? ` / ${bike.note}` : ''}`} className="min-w-0 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-left transition hover:border-cyan-300 hover:bg-cyan-50"><span className="block text-xs font-black text-slate-900">{bike.number}</span><span className="mt-0.5 block max-w-28 truncate text-[9px] font-bold text-slate-500">{bike.type}</span></button>)}
+                {bikes.map((bike) => <button key={bike.id} type="button" onClick={() => onNavigate('fleet')} title={`${bike.number} / ${bike.type}${bike.note ? ` / ${bike.note}` : ''}`} className="min-w-0 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-left transition hover:border-cyan-300 hover:bg-cyan-50"><span className="block text-xs font-black text-slate-900">{bike.number}</span><span className="mt-0.5 block max-w-28 truncate text-[11px] font-bold text-slate-500">{bike.type}</span></button>)}
               </div> : <p className="mt-3 text-xs font-semibold text-slate-400">Tidak ada unit</p>}
             </div>
           ))}
         </div>
         {fleetOverview.byType.length ? <div className="flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-100 bg-slate-50 px-5 py-3">
-          {fleetOverview.byType.map((type) => <span key={type.type} className="text-[10px] font-bold text-slate-600"><strong className="text-slate-900">{type.type}</strong> {type.total} unit / {type.tersedia} siap</span>)}
+          {fleetOverview.byType.map((type) => <span key={type.type} className="text-[11px] font-bold text-slate-600"><strong className="text-slate-900">{type.type}</strong> {type.total} unit / {type.tersedia} siap</span>)}
         </div> : null}
       </section> : null}
 
@@ -232,10 +222,10 @@ export default function DashboardPage({ now, dueSoonHours, stats, fleetOverview,
         {recentTransactions.length > 0 ? (
           <div className="divide-y divide-slate-100">
             {recentTransactions.slice(0, 5).map((transaction) => (
-              <div key={transaction.id} className="grid gap-2 px-5 py-4 sm:grid-cols-[1fr_auto_auto] sm:items-center">
-                <div className="min-w-0"><p className="truncate text-sm font-black text-slate-800">{transaction.note}</p><p className="mt-1 text-xs font-semibold text-slate-500">{formatDate(transaction.date)}</p></div>
+              <div key={transaction.id} className="grid gap-2 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
+                <div className="min-w-0"><p className="[overflow-wrap:anywhere] text-sm font-black text-slate-800">{transaction.note}</p><p className="mt-1 text-xs font-semibold text-slate-500">{formatDate(transaction.date)}</p></div>
                 {transaction.activityType === 'switch' ? <span className="text-xs font-black text-cyan-700">Ganti Unit</span> : <p className={`text-sm font-black ${transaction.type === 'pendapatan' || transaction.type === 'payment' ? 'text-emerald-700' : 'text-rose-700'}`}>{transaction.type === 'pendapatan' || transaction.type === 'payment' ? '+' : '-'} {formatCurrency(transaction.amount)}</p>}
-                <span className="text-[10px] font-black uppercase tracking-wide text-slate-600">{transaction.category === 'rental' ? transaction.rentalCode || 'Sewa' : 'Manual'}</span>
+                <span className="text-[11px] font-black uppercase tracking-wide text-slate-600">{transaction.category === 'rental' ? transaction.rentalCode || 'Sewa' : 'Manual'}</span>
               </div>
             ))}
           </div>

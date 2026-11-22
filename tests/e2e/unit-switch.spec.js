@@ -144,14 +144,13 @@ test('two tabs competing for the same replacement cannot double-book a unit', as
   await other.goto('/#rental');
   const firstDialog = await openReview(page);
   const otherDialog = await openReview(other, 'F-006');
-  await Promise.all([
-    firstDialog.getByRole('button', { name: 'Konfirmasi Ganti Unit' }).click(),
-    otherDialog.getByRole('button', { name: 'Konfirmasi Ganti Unit' }).click(),
-  ]);
+  // Dispatch in both tabs without interleaving real pointer focus between Chrome pages.
+  await Promise.all([firstDialog, otherDialog].map((dialog) => dialog.getByRole('button', { name: 'Konfirmasi Ganti Unit' }).evaluate((button) => button.click())));
   await expect.poll(async () => (await snapshot(page)).transactions.flatMap((transaction) => transaction.switchHistory).length).toBe(1);
-  const firstOpen = await firstDialog.count();
-  const losingDialog = firstOpen ? firstDialog : otherDialog;
-  await expect(losingDialog.getByRole('alert')).toHaveText('Unit ini sudah tidak tersedia. Pilih unit lain.');
+  const errors = [firstDialog, otherDialog].map((dialog) => dialog.getByRole('alert'));
+  await expect.poll(async () => (await Promise.all(errors.map((alert) => alert.allTextContents()))).flat())
+    .toEqual(['Unit ini sudah tidak tersedia. Pilih unit lain.']);
+  await expect.poll(async () => (await firstDialog.count()) + (await otherDialog.count())).toBe(1);
   const state = await snapshot(page);
   expect(state.transactions.filter((transaction) => transaction.bikeId === 2 && !transaction.returnedAt)).toHaveLength(1);
   expect(state.bikes.filter((bike) => bike.status === 'disewa')).toHaveLength(2);
@@ -230,13 +229,22 @@ test('backup v7 round-trip preserves switches and imports legacy backups safely'
   const backup = JSON.parse(await readFile(await (await downloadEvent).path(), 'utf8'));
   expect(backup.schemaVersion).toBe(7);
   expect(backup.transactions).toEqual(switched.transactions);
-  await page.locator('input[type="file"]').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });
+  const restore = async (name, data) => {
+    await page.getByLabel('File backup').setInputFiles({ name, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(data)) });
+    const preview = page.getByRole('dialog', { name: 'Tinjau Impor Backup' });
+    const safetyCopy = page.waitForEvent('download');
+    await preview.getByRole('button', { name: 'Unduh Backup Saat Ini' }).click();
+    await safetyCopy;
+    await preview.getByRole('button', { name: 'Terapkan Impor' }).click();
+    await expect(preview).toHaveCount(0);
+  };
+  await restore('backup.json', backup);
   await expect(page.getByText('Backup berhasil diimpor dan diterapkan.', { exact: true })).toBeVisible();
   expect((await snapshot(page)).transactions).toEqual(switched.transactions);
   const legacy = structuredClone(backup);
   legacy.schemaVersion = 4;
   for (const transaction of legacy.transactions) delete transaction.switchHistory;
-  await page.locator('input[type="file"]').setInputFiles({ name: 'legacy.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(legacy)) });
+  await restore('legacy.json', legacy);
   await expect.poll(async () => (await snapshot(page)).transactions[0].switchHistory.length).toBe(0);
   await page.getByRole('button', { name: 'Rental', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Ganti Unit B-002' })).toBeVisible();

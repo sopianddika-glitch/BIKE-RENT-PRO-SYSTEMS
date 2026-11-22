@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import AppShell from './components/AppShell.jsx';
 import DateRangeFilter from './components/DateRangeFilter.jsx';
-import { initialBikes, initialRentalRates, initialSystemSettings, initialTransactions } from './data/seed.js';
 import DashboardPage from './pages/DashboardPage.jsx';
 import FinancePage from './pages/FinancePage.jsx';
 import FleetPage from './pages/FleetPage.jsx';
@@ -15,30 +14,24 @@ import {
   createRentalCode,
   getActiveRentals,
   getNextUnitNumber,
-  normalizeBike,
   normalizeRentalRate,
   normalizeSystemSettings,
   normalizeTransaction,
 } from './lib/domain.js';
 import { normalizeText } from './lib/formatters.js';
-import { loadState, saveState } from './lib/storage.js';
+import { makeDemoData, parseBackup, readOperations } from './lib/operations.js';
 import useOperations from './lib/useOperations.js';
 import { getSwitchActivities, getReplacementBikes, switchRentalUnit } from './lib/unitSwitch.js';
-import { createRentalTiming, getReturnTiming, toDateTimeInput } from './lib/rentalDuration.js';
+import { createRentalTiming, getReturnTiming, isRentalClosed, toDateTimeInput } from './lib/rentalDuration.js';
 import useRentalClock from './lib/useRentalClock.js';
 import { createRentalPricing, getOutstandingBalances, getUnitRateSnapshot, money, recordRentalPayment, sameRateSnapshot, UNIT_RATE_FIELDS, extendRental, EXTENSION_RATE_FIELDS, getFinancialEntries } from './lib/rentalPricing.js';
 
-const STORAGE_KEYS = {
-  rentalRates: 'bike-rent-pro:rental-rates',
-  systemSettings: 'bike-rent-pro:system-settings',
-};
-
 const pageMeta = {
-  dashboard: { title: 'Dashboard', subtitle: 'Ringkasan armada, arus kas, dan pekerjaan hari ini', description: 'Pantau armada, transaksi, laba, dan setoran rental sepeda dari satu pusat operasi.' },
-  rental: { title: 'Rental', subtitle: 'Aktifkan sewa baru dan proses pengembalian unit', description: 'Kelola penyewaan dan pengembalian unit sepeda dengan alur operasional yang jelas.' },
-  fleet: { title: 'Unit', subtitle: 'Katalog unit, harga, kondisi, dan status operasional', description: 'Kelola katalog, kondisi, harga, dan status armada sepeda.' },
-  finance: { title: 'Keuangan', subtitle: 'Audit transaksi, laba, biaya, dan penyelesaian setoran', description: 'Audit pendapatan, pengeluaran, laba, serta status setoran rental.' },
-  settings: { title: 'Pengaturan', subtitle: 'Bisnis, workflow, harga, dashboard, dan keamanan data', description: 'Atur workflow, penomoran, harga, tampilan dashboard, dan backup data operasional.' },
+  dashboard: { title: 'Dashboard', subtitle: 'Ringkasan armada, arus kas, dan aktivitas', description: 'Pantau armada, transaksi, laba, dan setoran rental sepeda dari satu pusat operasi.' },
+  rental: { title: 'Rental', subtitle: 'Penyewaan dan pengembalian unit', description: 'Kelola penyewaan dan pengembalian unit sepeda dengan alur operasional yang jelas.' },
+  fleet: { title: 'Unit', subtitle: 'Katalog, tarif, dan kondisi armada', description: 'Kelola katalog, kondisi, harga, dan status armada sepeda.' },
+  finance: { title: 'Keuangan', subtitle: 'Transaksi, laba, biaya, dan setoran', description: 'Audit pendapatan, pengeluaran, laba, serta status setoran rental.' },
+  settings: { title: 'Pengaturan', subtitle: 'Operasional, tarif, dan backup data', description: 'Atur workflow, penomoran, harga, tampilan dashboard, dan backup data operasional.' },
 };
 
 const getTodayInput = () => {
@@ -50,22 +43,22 @@ const getTodayInput = () => {
 const createRentalForm = () => ({ date: getTodayInput(), startTime: toDateTimeInput(new Date().toISOString()).slice(11, 16), durationDays: '1', autoStart: true, bikeIds: [], customerName: '', customerContact: '', rateSnapshots: {}, pricingInputs: {}, note: '' });
 const createFinanceForm = () => ({ date: getTodayInput(), type: 'pengeluaran', amount: '', note: '' });
 
-const loadSystemSettings = () => normalizeSystemSettings(loadState(STORAGE_KEYS.systemSettings, initialSystemSettings));
-
 const getInitialPage = () => {
   if (typeof window === 'undefined') return 'dashboard';
   const page = window.location.hash.replace('#', '');
-  return pageMeta[page] ? page : 'dashboard';
+  return Object.hasOwn(pageMeta, page) ? page : 'dashboard';
 };
 
 export default function App() {
   const [activePage, setActivePage] = useState(getInitialPage);
-  const { bikes, transactions, update: updateOperations } = useOperations();
+  const { bikes, transactions, rentalRates, systemSettings: savedSettings, storageError, readError, demo, update: updateOperations } = useOperations();
+  const [settingDrafts, setSettingDrafts] = useState({});
+  const [rateDrafts, setRateDrafts] = useState({});
+  const systemSettings = useMemo(() => ({ ...savedSettings, ...Object.fromEntries(Object.entries(settingDrafts).map(([field, draft]) => [field, draft.value])) }), [savedSettings, settingDrafts]);
   const now = useRentalClock();
-  const [rentalRates, setRentalRates] = useState(() => loadState(STORAGE_KEYS.rentalRates, initialRentalRates));
-  const [systemSettings, setSystemSettings] = useState(loadSystemSettings);
-  const [quickFilter, setQuickFilter] = useState(() => loadSystemSettings().defaultDashboardRange);
-  const [dateRange, setDateRange] = useState(() => getQuickRange(loadSystemSettings().defaultDashboardRange));
+  const [quickFilter, setQuickFilter] = useState(null);
+  const [dateRange, setDateRange] = useState(null);
+  const activeFilter = quickFilter ?? systemSettings.defaultDashboardRange;
   const [rentalForm, setRentalForm] = useState(createRentalForm);
   const [rentalError, setRentalError] = useState('');
   const [financeForm, setFinanceForm] = useState(createFinanceForm);
@@ -73,13 +66,10 @@ export default function App() {
   const [notice, setNotice] = useState(null);
   const [rentalDialogRequest, setRentalDialogRequest] = useState(false);
 
-  useEffect(() => saveState(STORAGE_KEYS.rentalRates, rentalRates), [rentalRates]);
-  useEffect(() => saveState(STORAGE_KEYS.systemSettings, systemSettings), [systemSettings]);
-
   useEffect(() => {
     const handleHistory = () => {
       const page = window.location.hash.replace('#', '');
-      if (pageMeta[page]) setActivePage(page);
+      if (Object.hasOwn(pageMeta, page) || !page) setActivePage(page || 'dashboard');
     };
     window.addEventListener('popstate', handleHistory);
     return () => window.removeEventListener('popstate', handleHistory);
@@ -100,18 +90,19 @@ export default function App() {
   const showNotice = (message, tone = 'success') => setNotice({ id: Date.now(), message, tone });
 
   const navigateTo = (page) => {
-    if (!pageMeta[page]) return;
+    if (!Object.hasOwn(pageMeta, page)) return;
     setActivePage(page);
     if (window.location.hash !== `#${page}`) window.history.pushState(null, '', `#${page}`);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
-  const getRate = (bikeType) => normalizeRentalRate(rentalRates[bikeType]);
+  const getRate = (bikeType) => ({ ...normalizeRentalRate(rentalRates[bikeType]), ...Object.fromEntries(Object.entries(rateDrafts[bikeType] ?? {}).map(([field, draft]) => [field, draft.value])) });
   const today = getTodayInput();
-  const effectiveDateRange = useMemo(() => (quickFilter === 'custom' ? dateRange : getQuickRange(quickFilter, new Date(`${today}T12:00:00`))), [dateRange, quickFilter, today]);
+  const effectiveDateRange = useMemo(() => (activeFilter === 'custom' ? dateRange : getQuickRange(activeFilter, new Date(`${today}T12:00:00`))), [dateRange, activeFilter, today]);
   const filteredTransactions = useMemo(() => getFinancialEntries(transactions).filter((transaction) => isDateWithinRange(transaction.date, effectiveDateRange)), [effectiveDateRange, transactions]);
 
-  const stats = useMemo(() => ({ ...buildDashboardStats(bikes, filteredTransactions), ...getOutstandingBalances(transactions, effectiveDateRange.end || today), balanceThrough: effectiveDateRange.end || today }), [bikes, filteredTransactions, transactions, effectiveDateRange.end, today]);
+  const availableBikes = useMemo(() => getReplacementBikes(bikes, transactions, null), [bikes, transactions]);
+  const stats = useMemo(() => ({ ...buildDashboardStats(bikes, filteredTransactions), ...getOutstandingBalances(transactions, effectiveDateRange.end || today), readyCount: availableBikes.length, balanceThrough: effectiveDateRange.end || today }), [bikes, availableBikes.length, filteredTransactions, transactions, effectiveDateRange.end, today]);
   const fleetOverview = useMemo(() => buildFleetOverview(bikes), [bikes]);
   const activeRentals = useMemo(() => getActiveRentals(bikes, transactions), [bikes, transactions]);
   const dataHealth = useMemo(() => buildDataHealth(bikes, transactions, rentalRates), [bikes, rentalRates, transactions]);
@@ -137,13 +128,12 @@ export default function App() {
 
   const recentTransactions = useMemo(() => [...filteredTransactions, ...getSwitchActivities(transactions).filter((event) => isDateWithinRange(event.date, effectiveDateRange))]
     .sort((first, second) => `${second.timestamp || second.date}`.localeCompare(`${first.timestamp || first.date}`) || Number(second.id) - Number(first.id)), [effectiveDateRange, filteredTransactions, transactions]);
-  const availableBikes = useMemo(() => getReplacementBikes(bikes, transactions, null), [bikes, transactions]);
   const bikeTypes = useMemo(() => Array.from(new Set([...bikes.map((bike) => bike.type).filter(Boolean), ...Object.keys(rentalRates)])).sort((first, second) => first.localeCompare(second)), [bikes, rentalRates]);
   const suggestedUnitNumber = useMemo(() => getNextUnitNumber(bikes, systemSettings), [bikes, systemSettings]);
 
   const handleQuickFilter = (filter, range) => { setQuickFilter(filter); setDateRange(range); };
   const handleCustomRange = (range) => { setQuickFilter('custom'); setDateRange(range); };
-  const dateFilter = <DateRangeFilter quickFilter={quickFilter} range={effectiveDateRange} onQuickFilter={handleQuickFilter} onRangeChange={handleCustomRange} />;
+  const dateFilter = <DateRangeFilter quickFilter={activeFilter} range={effectiveDateRange} onQuickFilter={handleQuickFilter} onRangeChange={handleCustomRange} />;
 
   const handleRentalChange = (field, value) => {
     setRentalError('');
@@ -195,12 +185,12 @@ export default function App() {
       if (!selectedBikes.length || selectedBikes.length !== selectedIds.size || selectedBikes.some((bike) => !available.some((item) => item.id === bike.id))) {
         throw new Error('Unit ini sudah tidak tersedia. Pilih unit lain.');
       }
-      const timing = createRentalTiming(rentalForm, loadSystemSettings().maxRentalDays);
+      const timing = createRentalTiming(rentalForm, current.systemSettings.maxRentalDays);
       const customerName = rentalForm.customerName.trim();
       if (!customerName || !rentalForm.date) throw new Error('Nama tamu dan tanggal sewa wajib diisi.');
-      const nextId = current.transactions.length ? Math.max(...current.transactions.map((transaction) => transaction.id)) + 1 : 1;
+      const nextId = current.transactions.reduce((highest, transaction) => Math.max(highest, transaction.id), 0) + 1;
       const rentalGroupId = `rental-${Date.now()}-${nextId}`;
-      const rentalCode = createRentalCode(rentalForm.date, nextId, systemSettings);
+      const rentalCode = createRentalCode(rentalForm.date, nextId, current.systemSettings);
       const rentalNote = rentalForm.note.trim();
       const customerContact = rentalForm.customerContact.trim();
       const newTransactions = selectedBikes.map((bike, index) => {
@@ -235,7 +225,7 @@ export default function App() {
   }, ({ from, to }) => `Unit berhasil diganti dari ${from} ke ${to}.`, { requireLock: true });
 
   const handleExtendRental = (request) => commitOperation((current) => {
-    const next = extendRental(current, request, loadSystemSettings());
+    const next = extendRental(current, request, current.systemSettings);
     return { ...next, result: { success: true } };
   }, 'Rental berhasil diperpanjang.', { requireLock: true, actionName: 'Perpanjang Rental' });
 
@@ -255,7 +245,7 @@ export default function App() {
       return {
         ...current,
         bikes: current.bikes.map((bike) => selectedIds.has(bike.id) ? { ...bike, status: 'tersedia' } : bike),
-        transactions: current.transactions.map((transaction) => selectedIds.has(Number(transaction.bikeId)) && transaction.category === 'rental' && !transaction.returnedAt
+        transactions: current.transactions.map((transaction) => selectedIds.has(Number(transaction.bikeId)) && transaction.category === 'rental' && !isRentalClosed(transaction)
           ? { ...transaction, returnedAt, returnDate: getTodayInput(), ...getReturnTiming(transaction, returnedAt) } : transaction),
         result: { success: true, count: selectedBikes.length, number: selectedBikes[0].number },
       };
@@ -271,25 +261,26 @@ export default function App() {
   };
 
   const handleFinanceChange = (field, value) => { setFinanceError(''); setFinanceForm((current) => ({ ...current, [field]: value })); };
-  const handleCreateFinance = async (event) => {
-    event.preventDefault();
+  const handleCreateFinance = async () => {
     const amount = Number(financeForm.amount);
     const note = financeForm.note.trim();
     if (!financeForm.date || !Number.isSafeInteger(amount) || amount <= 0 || !note) { setFinanceError('Tanggal, nominal integer Rupiah, dan keterangan wajib diisi.'); return; }
     const result = await commitOperation((current) => {
-      const nextId = current.transactions.length ? Math.max(...current.transactions.map((transaction) => transaction.id)) + 1 : 1;
+      const nextId = current.transactions.reduce((highest, transaction) => Math.max(highest, transaction.id), 0) + 1;
       return { ...current, transactions: [{ id: nextId, date: financeForm.date, type: financeForm.type, category: 'manual', amount, note, bikeId: null, costAmount: 0, grossProfit: null, settled: null, returnedAt: null }, ...current.transactions] };
     }, 'Transaksi keuangan berhasil disimpan.');
     if (result.error) setFinanceError(result.error);
     else setFinanceForm(createFinanceForm());
+    return result;
   };
 
-  const handleToggleSettlement = (transactionId, extensionId = null) => commitOperation((current) => {
+  const handleToggleSettlement = (transactionId, extensionId, expectedSettled) => commitOperation((current) => {
     const transaction = current.transactions.find((item) => item.id === transactionId);
     if (!transaction) throw new Error('Transaksi tidak ditemukan.');
     const portion = extensionId ? transaction.extensionHistory?.find((event) => event.id === extensionId) : transaction;
     if (!portion) throw new Error('Catatan perpanjangan tidak ditemukan.');
-    const nextSettled = !portion.settled;
+    if (Boolean(portion.settled) !== expectedSettled) throw new Error('Status setoran sudah berubah. Periksa kembali transaksi.');
+    const nextSettled = !expectedSettled;
     const settlement = { settled: nextSettled, settledAt: nextSettled ? new Date().toISOString() : null };
     return { ...current, transactions: current.transactions.map((item) => item.id !== transactionId ? item : extensionId
       ? { ...item, extensionHistory: item.extensionHistory.map((event) => event.id === extensionId ? { ...event, ...settlement } : event) }
@@ -301,7 +292,7 @@ export default function App() {
     if (!transaction) throw new Error('Transaksi tidak ditemukan.');
     return {
       ...current,
-      bikes: current.bikes.map((bike) => transaction.category === 'rental' && !transaction.returnedAt && bike.id === Number(transaction.bikeId) ? { ...bike, status: 'tersedia' } : bike),
+      bikes: current.bikes.map((bike) => transaction.category === 'rental' && !isRentalClosed(transaction) && bike.id === Number(transaction.bikeId) ? { ...bike, status: 'tersedia' } : bike),
       transactions: current.transactions.filter((item) => item.id !== transactionId),
     };
   }, 'Transaksi dihapus dan status unit telah disinkronkan.', { tone: 'warning' });
@@ -317,7 +308,7 @@ export default function App() {
     if (editingId && existingBike.status !== expectedStatus) throw new Error('Status unit sudah berubah. Tutup editor dan buka kembali unit tersebut.');
     if (editingId && !sameRateSnapshot(getUnitRateSnapshot(existingBike), expectedRate)) throw new Error('Rate unit sudah berubah. Tutup editor dan buka kembali unit tersebut.');
     if (form.status === 'disewa' && existingBike?.status !== 'disewa') throw new Error('Aktifkan status disewa melalui menu Rental agar data tamu dan transaksi tetap sinkron.');
-    const nextId = current.bikes.length ? Math.max(...current.bikes.map((bike) => bike.id)) + 1 : 1;
+    const nextId = current.bikes.reduce((highest, bike) => Math.max(highest, bike.id), 0) + 1;
     const unitRates = Object.fromEntries(UNIT_RATE_FIELDS.map((field) => [field, form[field] === '' || form[field] == null ? null : money(form[field], 'Rate / modal')]));
     const rateChanged = UNIT_RATE_FIELDS.some((field) => (existingBike?.[field] ?? null) !== unitRates[field]);
     const rateHistory = [...(existingBike?.rateHistory || []), ...(rateChanged ? [{ changedAt: new Date().toISOString(), previous: existingBike ? Object.fromEntries(UNIT_RATE_FIELDS.map((field) => [field, existingBike[field] ?? null])) : null, next: unitRates }] : [])];
@@ -326,7 +317,7 @@ export default function App() {
       ...current,
       bikes: editingId ? current.bikes.map((bike) => bike.id === editingId ? { ...bike, ...savedForm, number, type, note: form.note.trim() } : bike)
         : [...current.bikes, { id: nextId, ...savedForm, number, type, note: form.note.trim() }],
-      transactions: current.transactions.map((transaction) => existingBike?.status === 'disewa' && form.status !== 'disewa' && transaction.category === 'rental' && Number(transaction.bikeId) === editingId && !transaction.returnedAt
+      transactions: current.transactions.map((transaction) => existingBike?.status === 'disewa' && form.status !== 'disewa' && transaction.category === 'rental' && Number(transaction.bikeId) === editingId && !isRentalClosed(transaction)
         ? { ...transaction, returnedAt: new Date().toISOString(), returnDate: getTodayInput(), ...getReturnTiming(transaction, new Date().toISOString()) } : transaction),
       result: { success: true, number, edited: Boolean(editingId) },
     };
@@ -335,7 +326,7 @@ export default function App() {
   const handleDeleteBike = (bikeId) => commitOperation((current) => {
     const bike = current.bikes.find((item) => item.id === bikeId);
     if (!bike) throw new Error('Unit tidak ditemukan.');
-    if (bike.status === 'disewa' || current.transactions.some((transaction) => transaction.category === 'rental' && !transaction.returnedAt && Number(transaction.bikeId) === bikeId)) throw new Error('Unit yang sedang disewa tidak dapat dihapus.');
+    if (bike.status === 'disewa' || current.transactions.some((transaction) => transaction.category === 'rental' && !isRentalClosed(transaction) && Number(transaction.bikeId) === bikeId)) throw new Error('Unit yang sedang disewa tidak dapat dihapus.');
     return { ...current, bikes: current.bikes.filter((item) => item.id !== bikeId), result: { success: true, number: bike.number } };
   }, ({ number }) => `Unit ${number} dihapus dari armada.`, { tone: 'warning' });
 
@@ -347,104 +338,105 @@ export default function App() {
     return {
       ...current,
       bikes: current.bikes.map((item) => item.id === bikeId ? { ...item, status } : item),
-      transactions: current.transactions.map((transaction) => bike.status === 'disewa' && status !== 'disewa' && transaction.category === 'rental' && Number(transaction.bikeId) === bikeId && !transaction.returnedAt
+      transactions: current.transactions.map((transaction) => bike.status === 'disewa' && status !== 'disewa' && transaction.category === 'rental' && Number(transaction.bikeId) === bikeId && !isRentalClosed(transaction)
         ? { ...transaction, returnedAt: new Date().toISOString(), returnDate: getTodayInput(), ...getReturnTiming(transaction, new Date().toISOString()) } : transaction),
       result: { success: true, number: bike.number },
     };
   }, ({ number }) => `Status ${number} berhasil diperbarui.`);
 
-  const handleRateChange = (type, field, value) => {
+  const handleRateChange = async (type, field, value) => {
     const numericValue = EXTENSION_RATE_FIELDS.includes(field) && value === '' ? null : Math.max(0, Number(value) || 0);
-    setRentalRates((current) => ({ ...current, [type]: { ...normalizeRentalRate(current[type]), [field]: numericValue } }));
+    const draft = { value: numericValue };
+    setRateDrafts((current) => ({ ...current, [type]: { ...current[type], [field]: draft } }));
+    await commitOperation((current) => ({
+      ...current,
+      rentalRates: { ...current.rentalRates, [type]: { ...normalizeRentalRate(current.rentalRates[type]), [field]: numericValue } },
+    }));
+    setRateDrafts((current) => {
+      if (current[type]?.[field] !== draft) return current;
+      const remaining = { ...current[type] };
+      delete remaining[field];
+      return { ...current, [type]: remaining };
+    });
   };
 
-  const handleAddBikeType = ({ type, cost, price }) => {
+  const handleAddBikeType = ({ type, cost, price }) => commitOperation((current) => {
     const cleanType = String(type || '').trim();
-    if (!cleanType) return { error: 'Nama tipe sepeda wajib diisi.' };
-    if (bikeTypes.some((item) => normalizeText(item) === normalizeText(cleanType))) return { error: 'Tipe sepeda sudah tersedia.' };
-    setRentalRates((current) => ({ ...current, [cleanType]: normalizeRentalRate({ cost, price }) }));
-    showNotice(`Tipe ${cleanType} berhasil ditambahkan.`);
-    return { success: true };
-  };
+    if (!cleanType) throw new Error('Nama tipe sepeda wajib diisi.');
+    const existing = [...current.bikes.map((bike) => bike.type), ...Object.keys(current.rentalRates)];
+    if (existing.some((item) => normalizeText(item) === normalizeText(cleanType))) throw new Error('Tipe sepeda sudah tersedia.');
+    return { ...current, rentalRates: { ...current.rentalRates, [cleanType]: normalizeRentalRate({ cost, price }) } };
+  }, 'Tipe sepeda berhasil ditambahkan.');
 
-  const handleRemoveBikeType = (type) => {
-    if (bikes.some((bike) => bike.type === type)) return { error: 'Tipe masih digunakan oleh unit armada dan tidak dapat dihapus.' };
-    setRentalRates((current) => Object.fromEntries(Object.entries(current).filter(([key]) => key !== type)));
-    showNotice(`Tipe ${type} dihapus dari daftar harga.`, 'warning');
-    return { success: true };
-  };
+  const handleRemoveBikeType = (type) => commitOperation((current) => {
+    if (current.bikes.some((bike) => bike.type === type)) throw new Error('Tipe masih digunakan oleh unit armada dan tidak dapat dihapus.');
+    return { ...current, rentalRates: Object.fromEntries(Object.entries(current.rentalRates).filter(([key]) => key !== type)) };
+  }, `Tipe ${type} dihapus dari daftar harga.`, { tone: 'warning' });
 
-  const handleSystemSettingChange = (field, value) => {
+  const handleSystemSettingChange = async (field, value) => {
     const freeTextLimits = { businessName: 60, adminName: 60, businessLocation: 100, businessContact: 60 };
     const codeFields = ['unitPrefix', 'rentalCodePrefix'];
-    let nextSettings;
-    if (freeTextLimits[field]) {
-      nextSettings = { ...systemSettings, [field]: String(value).slice(0, freeTextLimits[field]) };
-    } else if (codeFields.includes(field)) {
-      nextSettings = { ...systemSettings, [field]: String(value).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) };
-    } else {
-      nextSettings = normalizeSystemSettings({ ...systemSettings, [field]: value });
-    }
-    setSystemSettings(nextSettings);
-    if (field === 'defaultDashboardRange') {
-      setQuickFilter(nextSettings.defaultDashboardRange);
-      setDateRange(getQuickRange(nextSettings.defaultDashboardRange));
-    }
+    const settingValue = freeTextLimits[field] ? String(value).slice(0, freeTextLimits[field])
+      : codeFields.includes(field) ? String(value).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)
+        : normalizeSystemSettings({ ...systemSettings, [field]: value })[field];
+    const draft = { value: settingValue };
+    setSettingDrafts((current) => ({ ...current, [field]: draft }));
+    const result = await commitOperation((current) => ({ ...current, systemSettings: { ...current.systemSettings, [field]: settingValue } }));
+    setSettingDrafts((current) => {
+      if (current[field] !== draft) return current;
+      const remaining = { ...current };
+      delete remaining[field];
+      return remaining;
+    });
+    if (!result.error && field === 'defaultDashboardRange') setQuickFilter(null);
   };
 
-  const handleExportData = () => {
-    const payload = JSON.stringify({ schemaVersion: 7, exportedAt: new Date().toISOString(), bikes, transactions, rentalRates, systemSettings }, null, 2);
-    const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `bike-rent-pro-backup-${getTodayInput()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    showNotice('Backup data berhasil dibuat.');
-  };
-
-  const handleImportData = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleExportData = (expectedRevision) => {
     try {
-      const payload = JSON.parse(await file.text());
-      if (!Array.isArray(payload.bikes) || !Array.isArray(payload.transactions) || !payload.rentalRates) throw new Error('Format backup tidak valid');
-      const result = await commitOperation((current) => ({ ...current, bikes: payload.bikes.map(normalizeBike), transactions: payload.transactions.map(normalizeTransaction) }));
-      if (result.error) return;
-      setRentalRates(Object.fromEntries(Object.entries(payload.rentalRates).map(([type, rate]) => [type, normalizeRentalRate(rate)])));
-      const importedSettings = normalizeSystemSettings(payload.systemSettings);
-      setSystemSettings(importedSettings);
-      setQuickFilter(importedSettings.defaultDashboardRange);
-      setDateRange(getQuickRange(importedSettings.defaultDashboardRange));
-      showNotice('Backup berhasil diimpor dan diterapkan.');
-    } catch {
-      showNotice('File backup tidak dapat dibaca.', 'error');
-    } finally {
-      event.target.value = '';
+      const { revision, bikes, transactions, rentalRates, systemSettings, demo } = readOperations();
+      if (expectedRevision != null && revision !== expectedRevision) throw new Error('Data berubah. Buka kembali pratinjau untuk mengunduh backup terbaru.');
+      const payload = JSON.stringify({ schemaVersion: 7, exportedAt: new Date().toISOString(), bikes, transactions, rentalRates, systemSettings, demo }, null, 2);
+      const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `bike-rent-pro-backup-${getTodayInput()}.json`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      showNotice('Unduhan backup dimulai.');
+      return true;
+    } catch (error) {
+      showNotice(error.message, 'error');
+      return false;
     }
   };
 
-  const handleResetData = async () => {
-    const result = await commitOperation((current) => ({ ...current, bikes: initialBikes.map(normalizeBike), transactions: initialTransactions.map(normalizeTransaction) }));
-    if (result.error) return;
-    setRentalRates(initialRentalRates);
-    setSystemSettings(initialSystemSettings);
-    setQuickFilter(initialSystemSettings.defaultDashboardRange);
-    setDateRange(getQuickRange(initialSystemSettings.defaultDashboardRange));
-    setRentalForm(createRentalForm());
-    setFinanceForm(createFinanceForm());
-    showNotice('Data demo berhasil dipulihkan.', 'warning');
+  const prepareReplacement = async (file) => {
+    const data = file ? parseBackup(JSON.parse(await file.text())) : makeDemoData();
+    const { revision, bikes, transactions } = readOperations();
+    return { data, revision, existingUnits: bikes.length, existingTransactions: transactions.length, filename: file?.name };
+  };
+
+  const applyReplacement = async ({ data, revision }) => {
+    const result = await commitOperation((current) => ({ ...current, ...data }),
+      data.demo ? 'Data demo diterapkan.' : 'Backup berhasil diimpor dan diterapkan.',
+      { requireLock: true, actionName: 'Pemulihan data', expectedRevision: revision });
+    if (!result.error) {
+      setQuickFilter(null);
+      setRentalForm(createRentalForm());
+      setFinanceForm(createFinanceForm());
+    }
+    return result;
   };
 
   const meta = pageMeta[activePage];
 
   return (
-    <AppShell activePage={activePage} onNavigate={navigateTo} pageTitle={meta.title} pageSubtitle={meta.subtitle} notice={notice} systemSettings={systemSettings}>
+    <AppShell activePage={activePage} onNavigate={navigateTo} pageTitle={meta.title} pageSubtitle={meta.subtitle} notice={notice} systemSettings={systemSettings} storageError={storageError} demo={demo}>
       {activePage === 'dashboard' ? <DashboardPage now={now} dueSoonHours={systemSettings.dueSoonHours} stats={stats} fleetOverview={fleetOverview} systemSettings={systemSettings} dateFilter={dateFilter} recentTransactions={recentTransactions} activeRentals={activeRentals} onNavigate={navigateTo} onStartRental={handleStartRental} onReturnBike={handleReturnBike} /> : null}
       {activePage === 'rental' ? <RentalPage now={now} settings={systemSettings} onExtendRental={handleExtendRental} bikes={bikes} transactions={transactions} onSwitchUnit={handleSwitchUnit} availableBikes={availableBikes} activeRentals={activeRentals} form={rentalForm} error={rentalError} getRate={getRate} openRequest={rentalDialogRequest} onOpenRequestHandled={() => setRentalDialogRequest(false)} onChange={handleRentalChange} onSubmit={handleCreateRental} onReturnBike={handleReturnBike} onReturnBikes={handleReturnBikes} onNavigate={navigateTo} /> : null}
       {activePage === 'fleet' ? <FleetPage now={now} dueSoonHours={systemSettings.dueSoonHours} activeRentals={activeRentals} bikes={bikes} bikeTypes={bikeTypes} suggestedUnitNumber={suggestedUnitNumber} onSaveBike={handleSaveBike} onDeleteBike={handleDeleteBike} onStatusChange={handleStatusChange} /> : null}
       {activePage === 'finance' ? <FinancePage onRentalPayment={handleRentalPayment} stats={stats} groups={transactionGroups} dateFilter={dateFilter} form={financeForm} error={financeError} onChange={handleFinanceChange} onSubmit={handleCreateFinance} onToggleSettlement={handleToggleSettlement} onDelete={handleDeleteTransaction} /> : null}
-      {activePage === 'settings' ? <SettingsPage bikeTypes={bikeTypes} bikes={bikes} transactions={transactions} systemSettings={systemSettings} dataHealth={dataHealth} suggestedUnitNumber={suggestedUnitNumber} getRate={getRate} onRateChange={handleRateChange} onAddBikeType={handleAddBikeType} onRemoveBikeType={handleRemoveBikeType} onSettingChange={handleSystemSettingChange} onExport={handleExportData} onImport={handleImportData} onReset={handleResetData} /> : null}
+      {activePage === 'settings' ? <SettingsPage bikeTypes={bikeTypes} bikes={bikes} transactions={transactions} systemSettings={systemSettings} dataHealth={dataHealth} suggestedUnitNumber={suggestedUnitNumber} getRate={getRate} onRateChange={handleRateChange} onAddBikeType={handleAddBikeType} onRemoveBikeType={handleRemoveBikeType} onSettingChange={handleSystemSettingChange} onExport={handleExportData} onPrepareReplacement={prepareReplacement} onApplyReplacement={applyReplacement} readError={readError} readyCount={availableBikes.length} /> : null}
     </AppShell>
   );
 }

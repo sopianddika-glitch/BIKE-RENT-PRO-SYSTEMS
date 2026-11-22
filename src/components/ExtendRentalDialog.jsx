@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useModal } from './Modal.jsx';
 import { Clock3, X } from 'lucide-react';
 import DurationPicker from './DurationPicker.jsx';
 import { formatCurrency } from '../lib/formatters.js';
@@ -12,7 +13,7 @@ export default function ExtendRentalDialog({ target, settings, getRate, now, onS
   const automatic = transaction.pricingVersion === 1;
   const summary = getRentalFinancials(transaction);
   const quoteFor = (value) => automatic ? getRateQuote(transaction, value) : getExtensionQuote(getRate(bike.type), value);
-  const dialogRef = useRef(null);
+  const dialogRef = useModal();
   const busyRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const [review, setReview] = useState(false);
@@ -38,15 +39,7 @@ export default function ExtendRentalDialog({ target, settings, getRate, now, onS
   } catch (cause) { previewError = cause.message; }
   const timeStatus = getRentalTimeStatus({ dueAt: preview?.previousDueAt }, now, settings.dueSoonHours);
 
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    const previousFocus = document.activeElement;
-    const previousOverflow = document.body.style.overflow;
-    dialog.showModal();
-    document.body.style.overflow = 'hidden';
-    return () => { dialog.close(); document.body.style.overflow = previousOverflow; if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus(); };
-  }, []);
-  useEffect(() => { dialogRef.current?.querySelector(review ? 'button[type="submit"]' : 'input, select')?.focus(); }, [review]);
+  useEffect(() => { dialogRef.current?.querySelector(review ? 'button[type="submit"]' : 'input, select')?.focus(); }, [dialogRef, review]);
 
   const change = (field, value) => {
     setError('');
@@ -80,9 +73,9 @@ export default function ExtendRentalDialog({ target, settings, getRate, now, onS
     finally { busyRef.current = false; setBusy(false); }
   };
   return (
-    <dialog ref={dialogRef} aria-labelledby="extend-title" aria-busy={busy} onCancel={(event) => { event.preventDefault(); if (!busyRef.current) onClose(); }} className="m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-xl overflow-y-auto rounded-lg bg-white p-0 text-slate-950 shadow-2xl backdrop:bg-slate-950/55 backdrop:backdrop-blur-sm">
+    <dialog ref={dialogRef} aria-labelledby="extend-title" aria-busy={busy} onCancel={(event) => { event.preventDefault(); if (!busyRef.current) onClose(); }} className="audit-modal max-w-xl">
       <form onSubmit={submit} noValidate>
-        <div className="flex items-start justify-between gap-3 border-b border-slate-200 p-5"><div><p className="text-[10px] font-black uppercase tracking-wide text-cyan-700">{review ? 'Review perpanjangan' : transaction.rentalCode || `#${transaction.id}`}</p><h2 id="extend-title" className="mt-1 flex items-center gap-2 text-lg font-black"><Clock3 size={20} /> Perpanjang Rental</h2></div><button type="button" disabled={busy} onClick={onClose} aria-label="Tutup Perpanjang Rental" className="rounded-md p-3 text-slate-500 hover:bg-slate-100"><X size={18} /></button></div>
+        <div className="flex items-start justify-between gap-3 border-b border-slate-200 p-5"><div><p className="text-[11px] font-black uppercase tracking-wide text-cyan-700">{review ? 'Review perpanjangan' : transaction.rentalCode || `#${transaction.id}`}</p><h2 id="extend-title" className="mt-1 flex items-center gap-2 text-lg font-black"><Clock3 size={20} /> Perpanjang Rental</h2></div><button type="button" disabled={busy} onClick={onClose} aria-label="Tutup Perpanjang Rental" className="rounded-md p-3 text-slate-500 hover:bg-slate-100"><X size={18} /></button></div>
         <div className="space-y-4 p-5">
           <div className="rounded-md bg-slate-50 p-3 text-xs"><p className="break-words font-black">{transaction.customerName || 'Belum dicatat'} · {bike.number} / {bike.type}</p><p className="mt-2 text-slate-600">Mulai: {formatTime(preview?.startedAt || transaction.startedAt)}</p><p className="mt-1 font-bold text-slate-800">Due saat ini: {formatTime(preview?.previousDueAt || transaction.dueAt)}</p></div>
           {timeStatus.id === 'overdue' ? <div role="status" className="rounded-md bg-amber-50 p-3 text-xs font-bold text-amber-900"><p>Rental sudah melewati waktu pengembalian.</p><p className="mt-1">Sekarang: {formatTime(new Date(now).toISOString())}</p><p className="mt-1">{timeStatus.text}. Tambahan tetap dihitung dari due sebelumnya.</p></div> : null}

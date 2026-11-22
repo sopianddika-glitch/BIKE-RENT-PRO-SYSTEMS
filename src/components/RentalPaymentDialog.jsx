@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useModal } from './Modal.jsx';
 import { getRentalFinancials } from '../lib/rentalPricing.js';
 import { toDateTimeInput } from '../lib/rentalDuration.js';
 import { formatCurrency } from '../lib/formatters.js';
@@ -6,18 +7,15 @@ import { formatCurrency } from '../lib/formatters.js';
 export default function RentalPaymentDialog({ rental, onSubmit, onClose }) {
   const summary = getRentalFinancials(rental);
   const legacy = summary.amountPaid === null;
-  const dialogRef = useRef(null);
+  const dialogRef = useModal();
   const busyRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const [review, setReview] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ amount: '', date: toDateTimeInput(new Date().toISOString(), rental.rentalTimeZone).slice(0, 10), note: '', verifyLegacyPayments: false });
   useEffect(() => {
-    const dialog = dialogRef.current;
-    const previousFocus = document.activeElement;
-    dialog.showModal();
-    return () => { dialog.close(); if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus(); };
-  }, []);
+    dialogRef.current?.querySelector(review ? 'button[type="submit"]' : '#payment-amount')?.focus();
+  }, [dialogRef, review]);
   const change = (field, value) => { setError(''); setForm((current) => ({ ...current, [field]: value })); };
   const submit = async (event) => {
     event.preventDefault();
@@ -34,7 +32,7 @@ export default function RentalPaymentDialog({ rental, onSubmit, onClose }) {
     } catch { setError('Pembayaran belum berhasil dicatat.'); }
     finally { busyRef.current = false; setBusy(false); }
   };
-  return <dialog ref={dialogRef} aria-labelledby="rental-payment-title" aria-busy={busy} onCancel={(event) => { event.preventDefault(); if (!busyRef.current) onClose(); }} className="m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-lg bg-white p-5 text-slate-950 shadow-2xl backdrop:bg-slate-950/55">
+  return <dialog ref={dialogRef} aria-labelledby="rental-payment-title" aria-busy={busy} onCancel={(event) => { event.preventDefault(); if (!busyRef.current) onClose(); }} className="audit-modal max-w-lg p-5">
     <form onSubmit={submit} noValidate className="space-y-4">
       <h2 id="rental-payment-title" className="text-lg font-black">Catat Pembayaran Rental</h2><p className="text-xs font-bold">{rental.rentalCode || `#${rental.id}`} · {rental.customerName || 'Pelanggan'} · {rental.bikeNumber}</p>
       <p className="text-sm">Total Charge: {formatCurrency(summary.totalCharge)}</p><p className="text-sm">Sudah Diterima: {legacy ? 'Belum dicatat' : formatCurrency(summary.amountPaid)}</p><p className="text-sm font-bold">Sisa Tagihan: {legacy ? 'Belum dapat ditentukan' : formatCurrency(summary.balanceDue)}</p>

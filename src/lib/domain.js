@@ -146,24 +146,32 @@ export const buildFleetOverview = (bikes) => {
   };
 };
 
-export const getActiveRentals = (bikes, transactions) => bikes
-  .filter((bike) => bike.status === 'disewa')
-  .map((bike) => ({
-    bike,
-    transaction: [...transactions]
-      .filter((transaction) => Number(transaction.bikeId) === bike.id && transaction.category === 'rental' && !isRentalClosed(transaction))
-      .sort((first, second) => second.id - first.id)[0] || null,
-  }));
+export const getActiveRentals = (bikes, transactions) => {
+  const latestByBike = new Map();
+  for (const transaction of transactions) {
+    if (transaction.category !== 'rental' || isRentalClosed(transaction)) continue;
+    const bikeId = Number(transaction.bikeId);
+    if (!latestByBike.has(bikeId) || transaction.id > latestByBike.get(bikeId).id) latestByBike.set(bikeId, transaction);
+  }
+  return bikes.filter((bike) => bike.status === 'disewa').map((bike) => ({ bike, transaction: latestByBike.get(bike.id) || null }));
+};
 
 export const buildDataHealth = (bikes, transactions, rentalRates) => {
-  const bikeIds = new Set(bikes.map((bike) => Number(bike.id)));
+  const bikeStatuses = new Map(bikes.map((bike) => [Number(bike.id), bike.status]));
   const numberCounts = bikes.reduce((counts, bike) => {
     const number = String(bike.number || '').trim().toLowerCase();
     counts.set(number, (counts.get(number) || 0) + 1);
     return counts;
   }, new Map());
   const duplicateUnitNumbers = Array.from(numberCounts.values()).filter((count) => count > 1).length;
-  const orphanRentalTransactions = transactions.filter((transaction) => transaction.category === 'rental' && transaction.bikeId && !bikeIds.has(Number(transaction.bikeId))).length;
+  const openRentals = transactions.filter((item) => item.category === 'rental' && item.bikeId && !isRentalClosed(item));
+  const orphanRentalTransactions = openRentals.filter((item) => !bikeStatuses.has(Number(item.bikeId))).length;
+  const activeRentalCounts = new Map();
+  for (const item of openRentals) {
+    const bikeId = Number(item.bikeId);
+    if (bikeStatuses.has(bikeId)) activeRentalCounts.set(bikeId, (activeRentalCounts.get(bikeId) || 0) + 1);
+  }
+  const activeRentalConflicts = [...activeRentalCounts.entries()].filter(([bikeId, count]) => count > 1 || bikeStatuses.get(bikeId) !== 'disewa').length;
   const negativeMarginTypes = Object.values(rentalRates).filter((rate) => {
     const normalizedRate = normalizeRentalRate(rate);
     return normalizedRate.price < normalizedRate.cost;
@@ -172,6 +180,7 @@ export const buildDataHealth = (bikes, transactions, rentalRates) => {
     duplicateUnitNumbers,
     orphanRentalTransactions,
     negativeMarginTypes,
-    issueCount: duplicateUnitNumbers + orphanRentalTransactions + negativeMarginTypes,
+    activeRentalConflicts,
+    issueCount: duplicateUnitNumbers + orphanRentalTransactions + negativeMarginTypes + activeRentalConflicts,
   };
 };

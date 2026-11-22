@@ -162,10 +162,12 @@ test('concurrent extensions are validated under the same lock and never charged 
   const first = await openExtend(page);
   const second = await openExtend(other);
   await reviewManual(first); await reviewManual(second);
-  await Promise.all([first.getByRole('button', { name: 'Konfirmasi Perpanjangan' }).click(), second.getByRole('button', { name: 'Konfirmasi Perpanjangan' }).click()]);
+  // Dispatch in both tabs without interleaving real pointer focus between Chrome pages.
+  await Promise.all([first, second].map((dialog) => dialog.getByRole('button', { name: 'Konfirmasi Perpanjangan' }).evaluate((button) => button.click())));
   await expect.poll(async () => (await snapshot(page)).transactions[0].extensionHistory.length).toBe(1);
-  const loser = await first.count() ? first : second;
-  await expect(loser.getByRole('alert')).toContainText('Rental sudah berubah.');
+  const errors = [first, second].map((dialog) => dialog.getByRole('alert'));
+  await expect.poll(async () => (await Promise.all(errors.map((alert) => alert.allTextContents()))).flat())
+    .toEqual([expect.stringContaining('Rental sudah berubah.')]);
   expect((await snapshot(page)).transactions[0].amount).toBe(150000);
   expect((await snapshot(page)).transactions).toHaveLength(1);
   await other.close();

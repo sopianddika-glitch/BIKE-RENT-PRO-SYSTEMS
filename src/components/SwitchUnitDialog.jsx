@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useModal } from './Modal.jsx';
 import { ArrowLeftRight, Search, X } from 'lucide-react';
 import { getReplacementBikes, OLD_UNIT_STATUSES, SWITCH_REASONS } from '../lib/unitSwitch.js';
 
 export default function SwitchUnitDialog({ target, bikes, transactions, onSubmit, onClose }) {
-  const dialogRef = useRef(null);
+  const dialogRef = useModal();
   const submittingRef = useRef(false);
   const [form, setForm] = useState({ replacementBikeId: '', reason: 'Kerusakan', oldBikeStatus: 'bengkel', note: '' });
   const [search, setSearch] = useState('');
@@ -16,21 +17,8 @@ export default function SwitchUnitDialog({ target, bikes, transactions, onSubmit
   const selectedBike = bikes.find((item) => item.id === Number(form.replacementBikeId));
 
   useEffect(() => {
-    const dialog = dialogRef.current;
-    const previousFocus = document.activeElement;
-    const previousOverflow = document.body.style.overflow;
-    dialog.showModal();
-    document.body.style.overflow = 'hidden';
-    return () => {
-      dialog.close();
-      document.body.style.overflow = previousOverflow;
-      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
-    };
-  }, []);
-
-  useEffect(() => {
     dialogRef.current?.querySelector(review ? 'button[type="submit"]' : 'input')?.focus();
-  }, [review]);
+  }, [dialogRef, review]);
 
   const change = (field, value) => {
     setError('');
@@ -67,10 +55,10 @@ export default function SwitchUnitDialog({ target, bikes, transactions, onSubmit
   };
 
   return (
-    <dialog ref={dialogRef} aria-labelledby="switch-unit-title" aria-busy={busy} onCancel={(event) => { event.preventDefault(); if (!submittingRef.current) onClose(); }} className="m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-xl overflow-y-auto rounded-lg bg-white p-0 text-slate-950 shadow-2xl backdrop:bg-slate-950/55 backdrop:backdrop-blur-sm">
+    <dialog ref={dialogRef} aria-labelledby="switch-unit-title" aria-busy={busy} onCancel={(event) => { event.preventDefault(); if (!submittingRef.current) onClose(); }} className="audit-modal max-w-xl">
       <form onSubmit={submit}>
         <div className="flex items-start justify-between gap-3 border-b border-slate-200 p-5">
-          <div><p className="text-[10px] font-black uppercase tracking-wide text-cyan-700">{review ? 'Review pergantian' : 'Rental aktif'}</p><h2 id="switch-unit-title" className="mt-1 flex items-center gap-2 text-xl font-black"><ArrowLeftRight size={20} /> Ganti Unit</h2></div>
+          <div><p className="text-[11px] font-black uppercase tracking-wide text-cyan-700">{review ? 'Review pergantian' : 'Rental aktif'}</p><h2 id="switch-unit-title" className="mt-1 flex items-center gap-2 text-xl font-black"><ArrowLeftRight size={20} /> Ganti Unit</h2></div>
           <button type="button" aria-label="Tutup Ganti Unit" disabled={busy} onClick={onClose} className="rounded-md p-3 text-slate-500 hover:bg-slate-100 disabled:opacity-50"><X size={18} /></button>
         </div>
         <div className="space-y-4 p-5">

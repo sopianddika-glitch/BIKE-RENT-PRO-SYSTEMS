@@ -7,11 +7,12 @@ export const OLD_UNIT_STATUSES = [
   { id: 'tersedia', label: 'Siap Disewa' },
 ];
 
-export const getReplacementBikes = (bikes, transactions, currentBikeId) => bikes.filter((bike) => (
-  bike.id !== Number(currentBikeId)
-  && bike.status === 'tersedia'
-  && !transactions.some((transaction) => transaction.category === 'rental' && !isRentalClosed(transaction) && Number(transaction.bikeId) === bike.id)
-));
+export const getReplacementBikes = (bikes, transactions, currentBikeId) => {
+  const reserved = new Set(transactions
+    .filter((transaction) => transaction.category === 'rental' && !isRentalClosed(transaction))
+    .map((transaction) => Number(transaction.bikeId)));
+  return bikes.filter((bike) => bike.id !== Number(currentBikeId) && bike.status === 'tersedia' && !reserved.has(bike.id));
+};
 
 // Keep the financial transaction intact. Only its current unit and unit history change.
 export const switchRentalUnit = (state, request, switchedAt = new Date().toISOString()) => {

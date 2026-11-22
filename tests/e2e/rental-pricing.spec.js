@@ -108,8 +108,8 @@ test('rate edit, switch, extend, partial payment, settlement, return, and next r
   await expect(page.getByTestId('finance-paid')).toHaveText('Rp 250.000');
   await page.getByRole('button', { name: 'Rental', exact: true }).click();
   await page.getByRole('article').getByRole('button', { name: 'Kembalikan', exact: true }).click();
+  await expect.poll(async () => (await stored(page)).transactions[0].dueAtOnReturn).toBe('2026-10-27T02:30:00.000Z');
   state = await stored(page);
-  expect(state.transactions[0].dueAtOnReturn).toBe('2026-10-27T02:30:00.000Z');
   expect(state.transactions[0].amount).toBe(250000);
   expect(state.bikes[1].status).toBe('tersedia');
   await page.getByRole('button', { name: 'Unit', exact: true }).click();

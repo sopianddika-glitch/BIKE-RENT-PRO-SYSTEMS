@@ -17,6 +17,7 @@ import { formatCurrency, formatDate } from '../lib/formatters.js';
 import DurationPicker from './DurationPicker.jsx';
 import { createRentalTiming, formatRentalDateTime } from '../lib/rentalDuration.js';
 import { getUnitRateSnapshot, previewRentalPricing } from '../lib/rentalPricing.js';
+import { useModal } from './Modal.jsx';
 import BookingUnitPricing from './BookingUnitPricing.jsx';
 
 const steps = [
@@ -39,7 +40,7 @@ export default function RentalDialog({
   const [step, setStep] = useState(1);
   const [search, setSearch] = useState('');
   const [localError, setLocalError] = useState('');
-  const dialogRef = useRef(null);
+  const dialogRef = useModal(open);
   const submittingRef = useRef(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -55,44 +56,16 @@ export default function RentalDialog({
   }, [availableBikes, search]);
 
   useEffect(() => {
-    if (!open) return undefined;
-    const previousOverflow = document.body.style.overflow;
-    const previousFocus = document.activeElement;
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        if (submittingRef.current) return;
-        onClose();
-        return;
-      }
-      if (event.key !== 'Tab') return;
-      const focusable = Array.from(dialogRef.current?.querySelectorAll('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])') || [])
-        .filter((element) => element.getClientRects().length > 0);
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', handleKeyDown);
-      if (previousFocus instanceof HTMLElement) previousFocus.focus();
-    };
-  }, [onClose, open]);
-
-  useEffect(() => {
     if (open) {
       setStep(1);
       setLocalError('');
     }
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    dialogRef.current?.querySelector(step === 1 ? 'input[type="search"]' : step === 2 ? '#bulk-rental-customer' : '#rental-dialog-title')?.focus();
+  }, [dialogRef, open, step]);
 
   if (!open) return null;
   let timing = null;
@@ -160,12 +133,12 @@ export default function RentalDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-sm sm:items-center sm:p-5" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !submittingRef.current) onClose(); }}>
-      <form ref={dialogRef} onSubmit={submit} className="flex max-h-[96vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-lg bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-lg" role="dialog" aria-modal="true" aria-labelledby="rental-dialog-title">
+    <dialog ref={dialogRef} aria-labelledby="rental-dialog-title" aria-busy={submitting} className="audit-modal max-w-4xl overflow-hidden" onCancel={(event) => { event.preventDefault(); if (!submittingRef.current) onClose(); }}>
+      <form onSubmit={submit} className="flex max-h-[90dvh] min-w-0 flex-col">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-cyan-700">Penyewaan Cepat</p>
-            <h2 id="rental-dialog-title" className="mt-1 text-xl font-black text-slate-950">Penyewaan Baru</h2>
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-cyan-700">Penyewaan Cepat</p>
+            <h2 id="rental-dialog-title" tabIndex="-1" className="mt-1 text-xl font-black text-slate-950">Penyewaan Baru</h2>
           </div>
           <button type="button" disabled={submitting} onClick={onClose} className="rounded-md p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950" aria-label="Tutup penyewaan"><X size={19} /></button>
         </div>
@@ -175,7 +148,7 @@ export default function RentalDialog({
             const complete = item.id < step;
             const active = item.id === step;
             return (
-              <li key={item.id} className={`flex min-w-0 items-center justify-center gap-2 border-b-2 px-2 py-3 text-[10px] font-black uppercase sm:text-xs ${active ? 'border-cyan-600 text-cyan-800' : complete ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-slate-600'}`} aria-current={active ? 'step' : undefined}>
+              <li key={item.id} className={`flex min-w-0 items-center justify-center gap-2 border-b-2 px-2 py-3 text-[11px] font-black uppercase sm:text-xs ${active ? 'border-cyan-600 text-cyan-800' : complete ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-slate-600'}`} aria-current={active ? 'step' : undefined}>
                 <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${active ? 'bg-cyan-700 text-white' : complete ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>{complete ? <Check size={14} /> : item.id}</span>
                 <span className="truncate">{item.label}</span>
               </li>
@@ -217,32 +190,32 @@ export default function RentalDialog({
 
           {step === 2 ? (
             <div className="mx-auto grid max-w-2xl gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2"><label htmlFor="bulk-rental-customer" className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-slate-600">Nama Tamu</label><div className="relative"><UserRound size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" /><input autoFocus id="bulk-rental-customer" type="text" value={form.customerName} onChange={(event) => onChange('customerName', event.target.value)} placeholder="Nama penyewa" className="w-full rounded-md border border-slate-200 py-3 pl-10 pr-3 text-sm font-bold outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" /></div></div>
-              <div><label htmlFor="bulk-rental-contact" className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-slate-600">Kontak</label><div className="relative"><Phone size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" /><input id="bulk-rental-contact" type="tel" value={form.customerContact} onChange={(event) => onChange('customerContact', event.target.value)} placeholder="Nomor telepon" className="w-full rounded-md border border-slate-200 py-3 pl-10 pr-3 text-sm font-bold outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" /></div></div>
-              <div><label htmlFor="bulk-rental-date" className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-slate-600">Tanggal Sewa</label><div className="relative"><CalendarDays size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" /><input id="bulk-rental-date" type="date" value={form.date} onChange={(event) => onChange('date', event.target.value)} className="w-full rounded-md border border-slate-200 py-3 pl-10 pr-3 text-sm font-bold outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" /></div></div>
-              <div><label htmlFor="rental-start-time" className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-slate-600">Jam Mulai</label><input id="rental-start-time" type="time" value={form.startTime} onChange={(event) => onChange('startTime', event.target.value)} className="w-full min-w-0 rounded-md border border-slate-200 p-3 text-sm font-bold" /></div>
+              <div className="sm:col-span-2"><label htmlFor="bulk-rental-customer" className="mb-1.5 block text-[11px] font-black uppercase tracking-wide text-slate-600">Nama Tamu</label><div className="relative"><UserRound size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" /><input id="bulk-rental-customer" type="text" value={form.customerName} onChange={(event) => onChange('customerName', event.target.value)} placeholder="Nama penyewa" className="w-full rounded-md border border-slate-200 py-3 pl-10 pr-3 text-sm font-bold outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" /></div></div>
+              <div><label htmlFor="bulk-rental-contact" className="mb-1.5 block text-[11px] font-black uppercase tracking-wide text-slate-600">Kontak</label><div className="relative"><Phone size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" /><input id="bulk-rental-contact" type="tel" value={form.customerContact} onChange={(event) => onChange('customerContact', event.target.value)} placeholder="Nomor telepon" className="w-full rounded-md border border-slate-200 py-3 pl-10 pr-3 text-sm font-bold outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" /></div></div>
+              <div><label htmlFor="bulk-rental-date" className="mb-1.5 block text-[11px] font-black uppercase tracking-wide text-slate-600">Tanggal Sewa</label><div className="relative"><CalendarDays size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" /><input id="bulk-rental-date" type="date" value={form.date} onChange={(event) => onChange('date', event.target.value)} className="w-full rounded-md border border-slate-200 py-3 pl-10 pr-3 text-sm font-bold outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" /></div></div>
+              <div><label htmlFor="rental-start-time" className="mb-1.5 block text-[11px] font-black uppercase tracking-wide text-slate-600">Jam Mulai</label><input id="rental-start-time" type="time" value={form.startTime} onChange={(event) => onChange('startTime', event.target.value)} className="w-full min-w-0 rounded-md border border-slate-200 p-3 text-sm font-bold" /></div>
               <DurationPicker id="rental-duration" label="Durasi Rental" value={form.durationDays} onChange={(value) => onChange('durationDays', value)} maxDays={maxRentalDays} />
               <div className="space-y-3 sm:col-span-2">{pricing.map((item) => <BookingUnitPricing key={item.bike.id} {...item} />)}{pricingError ? <button type="button" onClick={onConfigureRates} className="rounded-md bg-amber-50 p-3 text-xs font-black text-amber-900">Atur Rate di Unit</button> : null}</div>
               <div className="space-y-1 rounded-md bg-cyan-50 p-3 text-xs font-bold text-cyan-900 sm:col-span-2"><p>Mulai: {formatRentalDateTime(timing?.startedAt)}</p><p>Selesai otomatis: {timing ? formatRentalDateTime(timing.dueAt) : timingError}</p></div>
-              <div className="sm:col-span-2"><label htmlFor="bulk-rental-note" className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-slate-600">Catatan</label><div className="relative"><StickyNote size={17} className="absolute left-3 top-3 text-slate-500" /><textarea id="bulk-rental-note" rows="3" value={form.note} onChange={(event) => onChange('note', event.target.value)} placeholder="Jaminan, tujuan, atau kondisi khusus" className="w-full resize-none rounded-md border border-slate-200 py-3 pl-10 pr-3 text-sm font-semibold outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" /></div></div>
+              <div className="sm:col-span-2"><label htmlFor="bulk-rental-note" className="mb-1.5 block text-[11px] font-black uppercase tracking-wide text-slate-600">Catatan</label><div className="relative"><StickyNote size={17} className="absolute left-3 top-3 text-slate-500" /><textarea id="bulk-rental-note" rows="3" value={form.note} onChange={(event) => onChange('note', event.target.value)} placeholder="Jaminan, tujuan, atau kondisi khusus" className="w-full resize-none rounded-md border border-slate-200 py-3 pl-10 pr-3 text-sm font-semibold outline-none focus:border-cyan-400 focus:ring-4 focus:ring-cyan-100" /></div></div>
             </div>
           ) : null}
 
           {step === 3 ? (
             <div className="space-y-5">
               <div className="grid overflow-hidden rounded-md border border-slate-200 bg-slate-50 sm:grid-cols-3">
-                <div className="border-b border-slate-200 p-4 sm:border-b-0 sm:border-r"><p className="text-[9px] font-black uppercase tracking-wide text-slate-600">Tamu</p><p className="mt-1 truncate text-sm font-black text-slate-950">{form.customerName}</p></div>
-                <div className="border-b border-slate-200 p-4 sm:border-b-0 sm:border-r"><p className="text-[9px] font-black uppercase tracking-wide text-slate-600">Jumlah Unit</p><p className="mt-1 text-sm font-black text-slate-950">{selectedBikes.length} sepeda</p></div>
-                <div className="p-4"><p className="text-[9px] font-black uppercase tracking-wide text-slate-600">Tanggal</p><p className="mt-1 text-sm font-black text-slate-950">{formatDate(form.date)}</p></div>
+                <div className="border-b border-slate-200 p-4 sm:border-b-0 sm:border-r"><p className="text-[11px] font-black uppercase tracking-wide text-slate-600">Tamu</p><p className="mt-1 truncate text-sm font-black text-slate-950">{form.customerName}</p></div>
+                <div className="border-b border-slate-200 p-4 sm:border-b-0 sm:border-r"><p className="text-[11px] font-black uppercase tracking-wide text-slate-600">Jumlah Unit</p><p className="mt-1 text-sm font-black text-slate-950">{selectedBikes.length} sepeda</p></div>
+                <div className="p-4"><p className="text-[11px] font-black uppercase tracking-wide text-slate-600">Tanggal</p><p className="mt-1 text-sm font-black text-slate-950">{formatDate(form.date)}</p></div>
               </div>
 
               <div className="space-y-1 rounded-md bg-cyan-50 p-3 text-xs font-bold text-cyan-900"><p>Mulai: {formatRentalDateTime(timing?.startedAt)}</p><p>Selesai otomatis: {formatRentalDateTime(timing?.dueAt)}</p><p className="font-semibold">Charge dihitung dari snapshot rate × durasi. Pembayaran dicatat terpisah.</p></div>
               {pricing.map((item) => <BookingUnitPricing key={item.bike.id} {...item} editable input={form.pricingInputs[item.bike.id]} onChange={(field, value) => onChange('unitPricing', { bikeId: item.bike.id, field, value })} />)}
 
               <div className="grid overflow-hidden rounded-md bg-slate-950 text-white sm:grid-cols-3">
-                <div className="border-b border-white/10 p-4 sm:border-b-0 sm:border-r"><p className="text-[9px] font-black uppercase tracking-wide text-cyan-300">Total Tamu</p><p className="mt-1 text-xl font-black">{formatCurrency(totals.price)}</p></div>
-                <div className="border-b border-white/10 p-4 sm:border-b-0 sm:border-r"><p className="text-[9px] font-black uppercase tracking-wide text-rose-300">Total Modal</p><p className="mt-1 text-xl font-black">{formatCurrency(totals.cost)}</p></div>
-                <div className="p-4"><p className="text-[9px] font-black uppercase tracking-wide text-emerald-300">Estimasi Laba</p><p className="mt-1 text-xl font-black">{formatCurrency(totals.profit)}</p></div>
+                <div className="border-b border-white/10 p-4 sm:border-b-0 sm:border-r"><p className="text-[11px] font-black uppercase tracking-wide text-cyan-300">Total Tamu</p><p className="mt-1 text-xl font-black">{formatCurrency(totals.price)}</p></div>
+                <div className="border-b border-white/10 p-4 sm:border-b-0 sm:border-r"><p className="text-[11px] font-black uppercase tracking-wide text-rose-300">Total Modal</p><p className="mt-1 text-xl font-black">{formatCurrency(totals.cost)}</p></div>
+                <div className="p-4"><p className="text-[11px] font-black uppercase tracking-wide text-emerald-300">Estimasi Laba</p><p className="mt-1 text-xl font-black">{formatCurrency(totals.profit)}</p></div>
               </div>
             </div>
           ) : null}
@@ -258,6 +231,6 @@ export default function RentalDialog({
           </div>
         </div>
       </form>
-    </div>
+    </dialog>
   );
 }

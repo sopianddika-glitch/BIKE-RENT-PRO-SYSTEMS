@@ -39,13 +39,6 @@ body {
   background: #bae6fd;
 }
 
-button,
-input,
-select,
-textarea {
-  font: inherit;
-}
-
 button {
   cursor: pointer;
 }
@@ -81,5 +74,141 @@ button {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+}
+
+@layer components {
+  .app-header-row {
+    padding-inline: max(1rem, env(safe-area-inset-left)) max(1rem, env(safe-area-inset-right));
+  }
+
+  @media (min-width: 640px) {
+    .app-header-row {
+      padding-inline: max(1.5rem, env(safe-area-inset-left)) max(1.5rem, env(safe-area-inset-right));
+    }
+  }
+
+  .app-main {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+    overflow-wrap: anywhere;
+  }
+
+  .app-bottom-nav {
+    min-height: calc(3.625rem + env(safe-area-inset-bottom));
+    padding: 0 max(0.25rem, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(0.25rem, env(safe-area-inset-left));
+  }
+
+  .app-notice {
+    bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  }
+
+  .audit-modal {
+    margin: auto;
+    width: calc(100% - 1.5rem);
+    max-height: 90dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 0.5rem;
+    background: white;
+    color: #0f172a;
+    overflow-wrap: anywhere;
+  }
+
+  .audit-modal::backdrop {
+    background: rgb(2 6 23 / 55%);
+    backdrop-filter: blur(4px);
+  }
+
+  .responsive-table input,
+  .responsive-table select {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .responsive-table td,
+  .responsive-table th {
+    padding-inline: clamp(0.625rem, 1.15vw, 1.25rem);
+  }
+
+  @media (max-width: 767px) {
+    .responsive-table,
+    .responsive-table tbody,
+    .responsive-table tr {
+      display: block;
+    }
+
+    .responsive-table thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+
+    .responsive-table tbody tr {
+      padding: 0.75rem;
+    }
+
+    .responsive-table td {
+      display: grid;
+      grid-template-columns: minmax(0, 5.25rem) minmax(0, 1fr);
+      align-items: start;
+      gap: 0.25rem 0.75rem;
+      padding: 0.375rem 0;
+      text-align: left;
+    }
+
+    .responsive-table td > * {
+      grid-column: 2;
+      min-width: 0;
+    }
+
+    .responsive-table td::before {
+      grid-column: 1;
+      grid-row: 1;
+      content: attr(data-label) / "";
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #475569;
+    }
+
+    .responsive-table td:last-child > div {
+      flex-wrap: wrap;
+      justify-content: flex-start;
+    }
+  }
+
+  @media (min-width: 1280px) {
+    .app-header-row {
+      padding-inline: 2rem;
+    }
+
+    .app-main {
+      padding-bottom: 2rem;
+    }
+  }
+}
+
+:where(main, dialog) button {
+  min-height: 2.5rem;
+}
+
+:where(main, dialog) button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+:where(main, dialog) :is(input, select, textarea) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (pointer: coarse) {
+  :where(main, dialog) button {
+    min-height: 2.75rem;
+  }
+
+  :where(main, dialog) :is(input:not([type='checkbox']):not([type='radio']), select, textarea) {
+    font-size: 1rem;
   }
 }

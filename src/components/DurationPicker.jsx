@@ -9,7 +9,7 @@ export default function DurationPicker({ value, onChange, maxDays, label, id }) 
         </select>
         {!halfDay ? <input aria-label={label === 'Durasi Rental' ? 'Jumlah Hari' : 'Tambahan Hari'} type="number" min="1" max={maxDays} step="1" value={value} onChange={(event) => onChange(event.target.value)} className="w-24 rounded-md border border-slate-200 p-3 text-sm font-bold" /> : null}
       </div>
-      <p className="text-[10px] font-semibold text-slate-500">Maksimum total rental {maxDays} hari.</p>
+      <p className="text-[11px] font-semibold text-slate-500">Maksimum total rental {maxDays} hari.</p>
     </div>
   );
 }

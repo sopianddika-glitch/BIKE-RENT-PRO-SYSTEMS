@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import Modal from './Modal.jsx';
 import { quickFilters } from '../data/seed.js';
 import { getQuickRange } from '../lib/dateFilters.js';
 import { formatDate, formatFullDate } from '../lib/formatters.js';
@@ -36,19 +37,26 @@ const getCalendarDays = (monthDate) => {
 
 export default function DateRangeFilter({ quickFilter, range, onQuickFilter, onRangeChange }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [draftRange, setDraftRange] = useState(range);
+  const [selectingEnd, setSelectingEnd] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => parseInputDate(range.start) || new Date());
   const calendarDays = useMemo(() => getCalendarDays(calendarMonth), [calendarMonth]);
   const rangeLabel = range.start === range.end ? formatDate(range.start) : `${formatDate(range.start)} - ${formatDate(range.end)}`;
 
-  const selectDate = (dateValue) => {
-    const shouldStart = quickFilter !== 'custom' || !range.start || (range.start && range.end && range.start !== range.end);
-    const nextRange = shouldStart
-      ? { start: dateValue, end: dateValue }
-      : dateValue < range.start
-        ? { start: dateValue, end: range.start }
-        : { start: range.start, end: dateValue };
+  const openCalendar = () => {
+    setDraftRange(range);
+    setSelectingEnd(false);
+    setCalendarMonth(parseInputDate(range.start) || new Date());
+    setIsOpen(true);
+  };
 
-    onRangeChange(nextRange);
+  const selectDate = (dateValue) => {
+    if (!selectingEnd) setDraftRange({ start: dateValue, end: dateValue });
+    else {
+      const [start, end] = [draftRange.start, dateValue].sort();
+      setDraftRange({ start, end });
+    }
+    setSelectingEnd(!selectingEnd);
   };
 
   const chooseQuickFilter = (filterId) => {
@@ -59,15 +67,15 @@ export default function DateRangeFilter({ quickFilter, range, onQuickFilter, onR
   };
 
   return (
-    <div className="flex flex-col gap-3 border-y border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex gap-1 overflow-x-auto" role="group" aria-label="Filter cepat periode">
+    <div className="flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1.5 sm:gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="grid grid-cols-4 gap-1 sm:flex sm:flex-wrap" role="group" aria-label="Filter cepat periode">
         {quickFilters.map((filter) => (
           <button
             key={filter.id}
             type="button"
             onClick={() => chooseQuickFilter(filter.id)}
             aria-pressed={quickFilter === filter.id}
-            className={`shrink-0 rounded-md px-3.5 py-2 text-xs font-black transition ${
+            className={`shrink-0 rounded-md px-1.5 py-1.5 text-xs sm:px-3 font-black transition ${
               quickFilter === filter.id ? 'bg-slate-950 text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
             }`}
           >
@@ -79,10 +87,10 @@ export default function DateRangeFilter({ quickFilter, range, onQuickFilter, onR
       <div className="relative">
         <button
           type="button"
-          onClick={() => setIsOpen((current) => !current)}
+          onClick={openCalendar}
           aria-expanded={isOpen}
           aria-haspopup="dialog"
-          className="flex w-full items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-left transition hover:border-cyan-300 sm:min-w-[250px]"
+          className="flex w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-left transition hover:border-cyan-300 sm:min-w-[215px]"
         >
           <span className="flex min-w-0 items-center gap-2.5">
             <CalendarDays size={17} className="shrink-0 text-cyan-700" />
@@ -92,12 +100,12 @@ export default function DateRangeFilter({ quickFilter, range, onQuickFilter, onR
         </button>
 
         {isOpen ? (
-          <div className="absolute right-0 top-full z-40 mt-2 w-[min(92vw,360px)] rounded-md border border-slate-200 bg-white p-4 shadow-2xl" role="dialog" aria-label="Kalender periode">
+          <Modal className="max-w-sm p-3 sm:p-4" aria-label="Kalender periode" onClose={() => setIsOpen(false)}>
             <div className="mb-3 flex items-center justify-between gap-2">
               <button type="button" onClick={() => setCalendarMonth((month) => addMonths(month, -1))} className="rounded-md p-2 text-slate-500 hover:bg-slate-100" aria-label="Bulan sebelumnya">
                 <ChevronLeft size={18} />
               </button>
-              <p className="text-sm font-black text-slate-900">
+              <p aria-live="polite" className="text-center text-sm font-black text-slate-900">
                 {new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' }).format(calendarMonth)}
               </p>
               <button type="button" onClick={() => setCalendarMonth((month) => addMonths(month, 1))} className="rounded-md p-2 text-slate-500 hover:bg-slate-100" aria-label="Bulan berikutnya">
@@ -107,13 +115,13 @@ export default function DateRangeFilter({ quickFilter, range, onQuickFilter, onR
 
             <div className="grid grid-cols-7 gap-1 text-center">
               {weekdayLabels.map((label) => (
-                <span key={label} className="py-1.5 text-[9px] font-black uppercase text-slate-400">{label}</span>
+                <span key={label} className="py-1.5 text-[11px] font-black uppercase text-slate-400">{label}</span>
               ))}
               {calendarDays.map((date) => {
                 const dateValue = toInputDate(date);
                 const inMonth = date.getMonth() === calendarMonth.getMonth();
-                const endpoint = dateValue === range.start || dateValue === range.end;
-                const inRange = range.start && range.end && dateValue >= range.start && dateValue <= range.end;
+                const endpoint = dateValue === draftRange.start || dateValue === draftRange.end;
+                const inRange = draftRange.start && draftRange.end && dateValue >= draftRange.start && dateValue <= draftRange.end;
 
                 return (
                   <button
@@ -121,10 +129,11 @@ export default function DateRangeFilter({ quickFilter, range, onQuickFilter, onR
                     type="button"
                     onClick={() => selectDate(dateValue)}
                     aria-label={formatFullDate(dateValue)}
+                    aria-current={dateValue === toInputDate(new Date()) ? 'date' : undefined}
                     aria-pressed={Boolean(inRange)}
-                    className={`h-9 rounded-md text-xs font-extrabold transition ${
+                    className={`min-h-11 rounded-md text-xs font-extrabold transition ${
                       endpoint ? 'bg-slate-950 text-white' : inRange ? 'bg-cyan-50 text-cyan-800' : 'text-slate-600 hover:bg-slate-100'
-                    } ${inMonth ? '' : 'opacity-35'}`}
+                    } ${inMonth || inRange ? '' : 'bg-slate-50 text-slate-500'}`}
                   >
                     {date.getDate()}
                   </button>
@@ -134,9 +143,9 @@ export default function DateRangeFilter({ quickFilter, range, onQuickFilter, onR
 
             <div className="mt-3 flex justify-between border-t border-slate-100 pt-3">
               <button type="button" onClick={() => chooseQuickFilter('hari')} className="px-2 py-2 text-xs font-black text-cyan-700">Hari ini</button>
-              <button type="button" onClick={() => setIsOpen(false)} className="rounded-md bg-slate-950 px-4 py-2 text-xs font-black text-white">Terapkan</button>
+              <button type="button" onClick={() => { onRangeChange(draftRange); setIsOpen(false); }} className="rounded-md bg-slate-950 px-4 py-2 text-xs font-black text-white">Terapkan</button>
             </div>
-          </div>
+          </Modal>
         ) : null}
       </div>
     </div>

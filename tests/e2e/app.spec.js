@@ -62,6 +62,7 @@ test('rate per unit terhubung ke rental dan terpisah dari referensi harga lama',
   await expect(newBikeRow.getByLabel('Status S-008')).toHaveValue('tersedia');
 
   await page.getByRole('button', { name: 'Pengaturan' }).click();
+  await page.getByText('Referensi Harga Lama per Tipe', { exact: true }).click();
   await expect(page.getByRole('row').filter({ hasText: 'Hybrid Bike' })).toContainText('Rp 20.000');
   await page.getByLabel('Modal Hybrid Bike').fill('10000');
   await expect(page.getByRole('row').filter({ hasText: 'Hybrid Bike' })).toContainText('Rp 40.000');
@@ -107,7 +108,7 @@ test('pengaturan workflow mengendalikan penomoran dan dashboard secara dinamis',
   await expect(page.getByText('Aktivitas Terbaru')).toHaveCount(0);
 
   await page.reload();
-  const savedSettings = await page.evaluate(() => JSON.parse(window.localStorage.getItem('bike-rent-pro:system-settings')));
+  const savedSettings = await page.evaluate(() => JSON.parse(window.localStorage.getItem('bike-rent-pro:operations')).systemSettings);
   expect(savedSettings.businessName).toBe('Rental Pantai Bali');
   expect(savedSettings.rentalCodePrefix).toBe('RNT');
   await expect(page.getByRole('button', { name: /BR-0001/ })).toBeVisible();
